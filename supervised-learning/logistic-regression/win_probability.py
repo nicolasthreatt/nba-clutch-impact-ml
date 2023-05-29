@@ -1,65 +1,133 @@
 import requests
+import pandas as pd
 
-headers = {
-            'Host': 'stats.nba.com',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'x-nba-stats-origin': 'stats',
-            'x-nba-stats-token': 'true',
-            'Connection': 'keep-alive',
-            'Referer': 'https://stats.nba.com/',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-    }
 
-def get_game_ids() -> set:
-    # Set the base URL for the NBA API
-    base_url = 'https://stats.nba.com/stats/'
+BASE_URL = "https://stats.nba.com/stats/"
+HEADERS = {
+    # HEADERS for the API request
+    "Host": "stats.nba.com",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "x-nba-stats-origin": "stats",
+    "x-nba-stats-token": "true",
+    "Connection": "keep-alive",
+    "Referer": "https://stats.nba.com/",
+    "Pragma": "no-cache",
+    "Cache-Control": "no-cache",
+}
 
-    # Set the required parameters
+
+def load_games():
+    """Loads game data from the leaguegamefinder NBA API.
+
+    Returns:
+        dict: The game data returned by the API, or None if the request failed.
+
+    Raises:
+        requests.exceptions.RequestException: If the API request fails.
+    """
     params = {
-        'PlayerOrTeam': 'T',
-        'LeagueID': '00',
-        'Season': '2022-23',
-        'SeasonType': 'Regular Season',
+        "PlayerOrTeam": "T",
+        "LeagueID": "00",
+        "Season": "2022-23",
+        "SeasonType": "Regular Season",
     }
 
-    # Send the GET request
-    response = requests.get("https://stats.nba.com/stats/leaguegamefinder", headers=headers, params=params)
-
-    # Check if the request was successful
-    if response.status_code == 200:
+    try:
+        response = requests.get(
+            BASE_URL + "leaguegamefinder",
+            headers=HEADERS,
+            params=params,
+            timeout=10,
+        )
+        response.raise_for_status()
         data = response.json()
-
-        # Extract all distinct game IDs
-        # TODO: SHOW OFF DATA STRUCTURES AND ALGO AND USE CUSTOM SORT
-        game_ids =  sorted(set(game[4] for game in data['resultSets'][0]['rowSet']))
-
-        for game_id in game_ids:
-            # Set the parameters for play-by-play request
-            pbp_params = {
-                'GameID': game_id,
-                'StartPeriod': 4,
-                'EndPeriod': 10,
-                'RangeType': 2,
-                'StartRange': 0,
-                'EndRange': 28800,
-            }
-
-            # Send the GET request to retrieve play-by-play data
-            pbp_response = requests.get(base_url + 'playbyplayv2', headers=headers, params=pbp_params)
-
-            # Check if the request was successful
-            if pbp_response.status_code == 200:
-                pbp_data = pbp_response.json()
-                print(pbp_data)
-        
-            break
-
-    else:
-        print('Request failed with status code:', response.status_code)
+        return data
+    except requests.exceptions.RequestException as e:
+        print("Request failed:", e)
         return None
 
-get_game_ids()
+
+def load_play_by_play(game_id):
+    """Loads play-by-play data for a specific game ID.
+
+    Args:
+        game_id (str): The ID of the game.
+
+    Returns:
+        dict: The play-by-play data returned by the API, or None if the request failed.
+
+    Raises:
+        requests.exceptions.RequestException: If the API request fails.
+    """
+    pbp_params = {
+        "GameID": game_id,
+        "StartPeriod": 4,
+        "EndPeriod": 10,
+    }
+
+    try:
+        response = requests.get(
+            BASE_URL + "playbyplayv2",
+            headers=HEADERS,
+            params=pbp_params,
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data
+    except requests.exceptions.RequestException as e:
+        print("Request failed:", e)
+        return None
+
+
+def get_clutch_events() -> pd.DataFrame:
+    """Gets play-by-play data for clutch-time situations.
+
+    Clutch-time situations are defined as the last 5 minutes of the 4th quarter
+    or overtime when the score differential is 5 points or less.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the play-by-play data for clutch-time situations.
+    """
+    # Get game IDs. If the request fails, return to exit the function
+    data = load_games()
+    if data is None:
+        return
+
+    # Get the game IDs from the API response
+    # TODO: PERFORM CUSTOM SORT FROM DATA STRUCTURES
+    game_ids = sorted(set(game[4] for game in data["resultSets"][0]["rowSet"]))
+
+    # Get play-by-play data for each game ID
+    for game_id in game_ids:
+        print("Getting play-by-play data for game ID:", game_id)
+        pbp_data = load_play_by_play(game_id)
+        if pbp_data is None:
+            print("No play-by-play data for game ID:", game_id)
+            continue
+
+        # Create an empty DataFrame with the extracted column names
+        columns = pbp_data["resultSets"][0]["headers"]
+        df = pd.DataFrame(columns=columns)
+
+        # Iterate through each play in the play-by-play data and filter for clutch-time situations
+        # Append each clutch-time play to the DataFrame
+        for row in pbp_data["resultSets"][0]["rowSet"]:
+            gc_time_minutes = int(row[6].split(":")[0])
+            if row[10]:  # row[10] is the score
+                home_vs_away_score = row[10].split(" - ")
+                score_diff = int(home_vs_away_score[0]) - int(home_vs_away_score[1])
+                if gc_time_minutes <= 5 and abs(score_diff) <= 5:  # Clutch-time
+                    df = pd.concat(
+                        [df, pd.Series(row, index=columns)], ignore_index=True
+                    )
+
+    return df
+
+
+df = get_clutch_events()
+
+print(df.head())
