@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
 
 
 BASE_URL = "https://stats.nba.com/stats/"
@@ -19,7 +20,7 @@ HEADERS = {
 }
 
 
-def load_games():
+def load_games(season: str) -> dict:
     """Loads game data from the leaguegamefinder NBA API.
 
     Returns:
@@ -31,7 +32,7 @@ def load_games():
     params = {
         "PlayerOrTeam": "T",
         "LeagueID": "00",
-        "Season": "2022-23",
+        "Season": season,
         "SeasonType": "Regular Season",
     }
 
@@ -83,17 +84,20 @@ def load_play_by_play(game_id):
         return None
 
 
-def get_clutch_events() -> pd.DataFrame:
+def get_clutch_events(season: str) -> pd.DataFrame:
     """Gets play-by-play data for clutch-time situations.
 
     Clutch-time situations are defined as the last 5 minutes of the 4th quarter
     or overtime when the score differential is 5 points or less.
 
+    Args:
+        season (str): The season to get the data for.
+
     Returns:
         pd.DataFrame: A DataFrame containing the play-by-play data for clutch-time situations.
     """
     # Get game IDs. If the request fails, return to exit the function
-    data = load_games()
+    data = load_games(season)
     if data is None:
         return
 
@@ -121,13 +125,45 @@ def get_clutch_events() -> pd.DataFrame:
                 home_vs_away_score = row[10].split(" - ")
                 score_diff = int(home_vs_away_score[0]) - int(home_vs_away_score[1])
                 if gc_time_minutes <= 5 and abs(score_diff) <= 5:  # Clutch-time
-                    df = pd.concat(
-                        [df, pd.Series(row, index=columns)], ignore_index=True
-                    )
+                    df.loc[len(df.index)] = row
 
     return df
 
 
-df = get_clutch_events()
+def create_model(dfTrain: pd.DataFrame) -> LogisticRegression:
+    """Creates a logistic regression model.
 
-print(df.head())
+    Args:
+        dfTrain (pd.DataFrame): The training data.
+
+    Returns:
+        sklearn.linear_model.LogisticRegression: A logistic regression model.
+    """
+    FEATURES = [
+        "EVENTNUM",
+        "EVENTMSGTYPE",
+        "EVENTMSGACTIONTYPE",
+        "PERIOD",
+        "PCTIMESTRING",
+        "SCORE",
+        "SCOREMARGIN",
+    ]
+    TARGET = "HOME_WIN"
+
+    X = dfTrain.loc[FEATURES].values
+    y = dfTrain.loc[TARGET].values
+
+    model = LogisticRegression()
+    model.fit(X, y)
+    return model
+
+
+if __name__ == "__main__":
+    print("\nGetting Training Data...")
+    dfTrain = get_clutch_events("2021-22")
+
+    print("\nGetting Test Data...")
+    dfTest = get_clutch_events("2022-23")
+
+    print(dfTrain.head())
+    print(dfTest.head())
