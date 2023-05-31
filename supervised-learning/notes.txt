@@ -1,0 +1,24 @@
+Supervised Learning
+    - Most common form on machine learning is supervised learning
+    - Algorithm learns the relationship between a features matrix and a target vector 
+        + Feature = A measurable property
+        + Target = The outcome wanted to predict
+    - The goal is to create a model that can predict the target given the features
+
+Two Types of Supervised Learning:
+    - Classification
+        + Predicts a discrete value
+        + Example: Is this a cat or a dog?
+    - Regression
+        + Predicts a continuous value
+        + Example: How much will this house sell for?
+
+Logistic Regression Models:
+    - Model used for classification
+    - Can be used for tasks like classifying flowers into species or predicting a tumor as benign or malignant
+    - The model outputs a probability between 0 and 1
+    - Outcome depends on availability and quality of data
+    - Advantages
+        + Model training and predictions are relatively fast
+        + No tuning is usually required
+        + Performs will with a small number of observations
