@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+from collections import OrderedDict
 from sklearn.linear_model import LogisticRegression
 
 
@@ -112,11 +113,24 @@ def get_clutch_events(season: str) -> pd.DataFrame:
         return
 
     # Get the game IDs from the API response
-    # TODO: PERFORM CUSTOM SORT FROM DATA STRUCTURES
-    game_ids = sorted(set(game[4] for game in data["resultSets"][0]["rowSet"]))
+    # TODO: MOVE TO SEPARATE FUNCTION
+    games = {}
+    for game in data["resultSets"][0]["rowSet"]:
+        team_id = game[1]
+        game_id = game[4]
+        w_l = game[7]
+        if game_id not in games:
+            games[game_id] = {}
+
+        games[game_id][team_id] = w_l
+
+    # TODO: MOVE TO SEPARATE FUNCTION
+    # print("Found", len(games), "games")
+    # print("Found", len(win_loss), "wins/losses")
 
     # Get play-by-play data for each game ID
-    for game_id in game_ids:
+    # TODO: PERFORM CUSTOM SORT FOR GAME_IDS FROM DATA STRUCTURES
+    for game_id, team_w_l in OrderedDict(sorted(games.items())).items():
         print("Getting play-by-play data for game ID:", game_id)
         pbp_data = load_play_by_play(game_id)
         if pbp_data is None:
@@ -124,23 +138,17 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             continue
 
         # Create an empty DataFrame with the extracted column names
-        columns = pbp_data["resultSets"][0]["headers"]
+        columns = pbp_data["resultSets"][0]["headers"] + ["WL"]
         df = pd.DataFrame(columns=columns)
 
         # Iterate through each play in the play-by-play data and filter for clutch-time situations
         # Append each clutch-time play to the DataFrame
         for row in pbp_data["resultSets"][0]["rowSet"]:
-            gc_time_minutes = int(row[6].split(":")[0])
-            if row[10]:  # row[10] = score
-                home_vs_away_score = row[10].split(" - ")
-                score_diff = int(home_vs_away_score[0]) - int(home_vs_away_score[1])
-                if gc_time_minutes <= 5 and abs(score_diff) <= 5:  # Clutch-time
-                    df.loc[len(df.index)] = row
-                    print()
-                    print(columns)
-                    print("Clutch-time play:", row)
-                    print()
-                    # break
+            if row[6] and row[11]:  # game clock time and score margin
+                gc_time_minutes = int(row[6].split(":")[0])
+                score_margin = 0 if row[11] == "TIE" else int(row[11])
+                if gc_time_minutes <= 5 and abs(score_margin) <= 5:  # Clutch-time
+                    df.loc[len(df.index)] = row + [team_w_l]
 
     return df
 
@@ -181,7 +189,7 @@ if __name__ == "__main__":
     print("\nGetting Test Data...")
     dfTest = get_clutch_events("2022-23")
 
-    if not dfTrain or not dfTest:
+    if dfTrain.empty or dfTest.empty:
         exit("No data returned. Exiting...")
 
     model = create_model(dfTrain)
