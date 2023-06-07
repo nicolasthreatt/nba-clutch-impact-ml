@@ -118,11 +118,14 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     for game in data["resultSets"][0]["rowSet"]:
         team_id = game[1]
         game_id = game[4]
+        matchup = game[6]
         w_l = game[7]
         if game_id not in games:
             games[game_id] = {}
 
-        games[game_id][team_id] = w_l
+        home_win = int(w_l == "W") if "vs." in matchup else 0
+
+        games[game_id][team_id] = home_win
 
     # TODO: MOVE TO SEPARATE FUNCTION
     # print("Found", len(games), "games")
@@ -130,7 +133,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
 
     # Get play-by-play data for each game ID
     # TODO: PERFORM CUSTOM SORT FOR GAME_IDS FROM DATA STRUCTURES
-    for game_id, team_w_l in OrderedDict(sorted(games.items())).items():
+    for game_id, teams in OrderedDict(sorted(games.items())).items():
         print("Getting play-by-play data for game ID:", game_id)
         pbp_data = load_play_by_play(game_id)
         if pbp_data is None:
@@ -138,17 +141,26 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             continue
 
         # Create an empty DataFrame with the extracted column names
-        columns = pbp_data["resultSets"][0]["headers"] + ["WL"]
+        columns = pbp_data["resultSets"][0]["headers"] + ["HOME_WIN"]
         df = pd.DataFrame(columns=columns)
 
         # Iterate through each play in the play-by-play data and filter for clutch-time situations
         # Append each clutch-time play to the DataFrame
         for row in pbp_data["resultSets"][0]["rowSet"]:
-            if row[6] and row[11]:  # game clock time and score margin
+            player1_team_id = row[15]
+            player2_team_id = row[22]
+            player3_team_id = row[29]
+
+            # TODO: GET CORRECT TEAM ID for each event
+            player_team_id = player1_team_id or player2_team_id or player3_team_id
+
+            if row[6] and row[11] and player_team_id:  # game-clock/score margin
                 gc_time_minutes = int(row[6].split(":")[0])
                 score_margin = 0 if row[11] == "TIE" else int(row[11])
                 if gc_time_minutes <= 5 and abs(score_margin) <= 5:  # Clutch-time
-                    df.loc[len(df.index)] = row + [team_w_l]
+                    # TODO: GET CORRECT TEAM ID
+                    df.loc[len(df.index)] = row + [teams[player_team_id]]
+                    print(df.loc[len(df.index) - 1])
 
     return df
 
@@ -198,7 +210,6 @@ if __name__ == "__main__":
         dfTest.assign(
             predicted_winner=model.predict(dfTest.loc[FEATURES].values),
             home_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
-            # away_win_prob = model.predict_proba(dfTest.loc[FEATURES].values)[:,0])
         )
     )[dfTest.columns.tolist() + ["predicted_winner", "home_win_prob"]]
 
