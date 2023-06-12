@@ -1,3 +1,5 @@
+# TODO: CLEAN UP CODE
+
 import requests
 import pandas as pd
 from collections import OrderedDict
@@ -94,14 +96,9 @@ def load_play_by_play(game_id):
         print("Request failed:", e)
         return None
 
-def print_df(home_description: str, neutral_description: str, visitor_description: str) -> None:
+def print_df(description: str) -> None:
     print()
-    if home_description:
-        print("home_description:", home_description)
-    if neutral_description:
-        print("neutral_description:", neutral_description)
-    if visitor_description:
-        print("visitor_description:", visitor_description)
+    if description: print("description:", description)
     print()
 
 def get_clutch_events(season: str) -> pd.DataFrame:
@@ -125,16 +122,14 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     # TODO: MOVE TO SEPARATE FUNCTION
     games = {}
     for game in data["resultSets"][0]["rowSet"]:
-        team_id = game[1]
-        game_id = game[4]
-        matchup = game[6]
-        w_l = game[7]
+        team_id, game_id, matchup, w_l = game[1], game[4], game[6], game[7]
+
         if game_id not in games:
             games[game_id] = {}
 
-        home_win = int(w_l == "W") if "vs." in matchup else 0
+        home_win, home_team = (int(w_l == "W"), True) if "vs." in matchup else (0, False)
 
-        games[game_id][team_id] = home_win
+        games[game_id][team_id] = home_win, home_team
 
     # TODO: MOVE TO SEPARATE FUNCTION (ERROR CHECKING)
     # print("Found", len(games), "games")
@@ -150,7 +145,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             continue
 
         # Create an empty DataFrame with the extracted column names
-        columns = pbp_data["resultSets"][0]["headers"] + ["Player", "HOME_WIN"]
+        columns = pbp_data["resultSets"][0]["headers"] + ["Player", "HomeEvent", "HomeWin"]
         df = pd.DataFrame(columns=columns)
 
         # Iterate through each play in the play-by-play data and filter for clutch-time situations
@@ -159,6 +154,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             event_msg_type = row[2]
             event_msg_action_type = row[3]
             home_description = row[7]
+            neutral_description = row[8]
             visitor_description = row[9]
             description = home_description or visitor_description
             player1_name = row[14]
@@ -167,6 +163,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             player2_team_id = row[22]
             player3_name = row[28]
             player3_team_id = row[29]
+            valid = False
 
             # TODO: GET CORRECT TEAM ID for each event
             player_team_id = player1_team_id or player2_team_id or player3_team_id
@@ -174,26 +171,27 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             if row[6] and row[11]:  # game-clock/score margin
                 gc_time_minutes = int(row[6].split(":")[0])
                 score_margin = 0 if row[11] == "TIE" else int(row[11])
-                if gc_time_minutes <= 5 and abs(score_margin) <= 5:  # Clutch-time
+                if gc_time_minutes <= 5 and abs(score_margin) <= 5:  # Clutch-time events
+                    if event_msg_type == 5:
+                        print_df(description)
                     # TODO: GET CORRECT TEAM ID
                     if event_msg_type in (1, 2, 3, 4):
                         primary_player_name = player1_name
                         primary_player_team_id = player1_team_id
-                        df.loc[len(df.index)] = row + [primary_player_name, teams[primary_player_team_id]]
+                        df.loc[len(df.index)] = row + [primary_player_name, teams[primary_player_team_id][1], teams[primary_player_team_id][0]]
                         if event_msg_type == 1 and "AST" in description:
                             secondary_player_name = player2_name
                             secondary_player_team_id = player2_team_id
-                            df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id]]
-                            print_df(home_description, visitor_description, description)
-                        elif event_msg_type == 2 and "BLOCK" in description:
+                            df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+                        elif event_msg_type == 2 and "BLK" in description: # FIXME: BLOCKS
                             secondary_player_name = player3_name
                             secondary_player_team_id = player3_name
-                            df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id]]
-                            print_df(home_description, visitor_description, description)
-                    elif event_msg_type == 5 and "STEAL" in description: # FIXME: STEAL
+                            df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+                            break
+                    elif event_msg_type == 5 and "STL" in description: # FIXME: STEALS
                         steal_players = [(player1_name, player1_team_id), (player2_name, player2_team_id)]
                         for player_name, player_team_id in steal_players:
-                            df.loc[len(df.index)] = row + [player_name, teams[player_team_id]]
+                            df.loc[len(df.index)] = row + [player_name, teams[player_team_id][1], teams[player_team_id][0]]
 
     return df
 
