@@ -1,9 +1,26 @@
 # TODO: CLEAN UP CODE
-
+# MOVE TO A DIRECTORY -> nba-clutch-analysis
+# TODO: GET EVENT MSG ACTION TYPE FOR MADE/MISSED SHOTS and OFFENSIVE/DEFENSIVE REBOUNDS
+from enum import IntEnum
 import requests
 import pandas as pd
 from collections import OrderedDict
 from sklearn.linear_model import LogisticRegression
+
+# TODO: MOVE TO SEPERATE FILE
+class ClutchEventMsgType(IntEnum):
+    FIELD_GOAL_MADE = 1
+    FIELD_GOAL_MISSED = 2
+    FREE_THROW = 3
+    REBOUND = 4
+    TURNOVER = 5
+    FOUL = 6
+    VIOLATION = 7
+    # TIMEOUT = 9 # TODO: NEEDED?
+
+    @classmethod
+    def has_event(cls, event):
+        return event in cls._value2member_map_ 
 
 
 BASE_URL = "https://stats.nba.com/stats/"
@@ -26,7 +43,7 @@ FEATURES = [
     "EVENTMSGTYPE",
     "EVENTMSGACTIONTYPE",
     "PERIOD",
-    "PCTIMESTRING",
+    "PCTIMESTRING", # TODO: CONVERT TO SECONDS
     "SCORE",
     "SCOREMARGIN",
 ]
@@ -96,6 +113,7 @@ def load_play_by_play(game_id):
         print("Request failed:", e)
         return None
 
+# TODO: DELETE ONCE DONE
 def print_df(description: str) -> None:
     print()
     if description: print("description:", description)
@@ -151,6 +169,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
         # Iterate through each play in the play-by-play data and filter for clutch-time situations
         # Append each clutch-time play to the DataFrame
         for row in pbp_data["resultSets"][0]["rowSet"]:
+            # TODO: Think about adding a PbpEvent class to handle this logic during initialization
             event_msg_type = row[2]
             event_msg_action_type = row[3]
             home_description = row[7]
@@ -163,8 +182,6 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             player2_team_id = row[22]
             player3_name = row[28]
             player3_team_id = row[29]
-            
-            gc_time_minutes = score_margin = float("inf")
 
             # TODO: GET CORRECT TEAM ID for each event
             player_team_id = player1_team_id or player2_team_id or player3_team_id
@@ -172,29 +189,33 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             if row[6] and row[11]:  # game-clock/score margin
                 gc_time_minutes = int(row[6].split(":")[0])
                 score_margin = 0 if row[11] == "TIE" else int(row[11])
-                if event_msg_type in (1, 2, 3, 4, 5):
-                    clutch = gc_time_minutes <= 5 and abs(score_margin) <= 5
+                # if event_msg_type in (1, 2, 3, 4, 5):
+                clutch = gc_time_minutes <= 5 and abs(score_margin) <= 5
 
-            if clutch:
-                # TODO: GET CORRECT TEAM ID FOR EACH EVENT
-                if event_msg_type in (1, 2, 3, 4, 5) and player1_name and player_team_id:
-                    primary_player_name = player1_name
-                    primary_player_team_id = player1_team_id
-                    df.loc[len(df.index)] = row + [primary_player_name, teams[primary_player_team_id][1], teams[primary_player_team_id][0]]
-                    if event_msg_type == 1 and "AST" in description: # ASSISTS
-                        secondary_player_name = player2_name
-                        secondary_player_team_id = player2_team_id
-                        df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
-                    elif event_msg_type == 2 and "BLK" in description: # BLOCKS
-                        secondary_player_name = player3_name
-                        secondary_player_team_id = player3_team_id
-                        print_df(description)
-                        df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
-                    elif event_msg_type == 5 and "STL" in description: # STEALS
-                        secondary_player_name = player2_name
-                        secondary_player_team_id = player2_team_id
-                        print_df(description)
-                        df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+            # if clutch and event_msg_type in (1, 2, 3, 4, 5, 6, 7):
+            if clutch and EventMsgType.has_event(event_msg_action_type):
+                # TODO: GET CORRECT TEAM ID FOR EACH EVENT AND MOVE
+                # if event_msg_type÷ in (1, 2, 3, 4, 5): # and player1_name and player_team_id:
+                primary_player_name = player1_name
+                primary_player_team_id = player1_team_id
+                df.loc[len(df.index)] = row + [primary_player_name, teams[primary_player_team_id][1], teams[primary_player_team_id][0]]
+                if event_msg_type == 1 and "AST" in description: # ASSISTS
+                    secondary_player_name = player2_name
+                    print_df(description)
+                    secondary_player_team_id = player2_team_id
+                    df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+                elif event_msg_type == 2 and "BLK" in description: # BLOCKS
+                    secondary_player_name = player3_name
+                    secondary_player_team_id = player3_team_id
+                    print_df(description)
+                    df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+                elif event_msg_type == 5 and "STL" in description: # STEALS
+                    secondary_player_name = player2_name
+                    secondary_player_team_id = player2_team_id
+                    print_df(description)
+                    df.loc[len(df.index)] = row + [secondary_player_name, teams[secondary_player_team_id][1], teams[secondary_player_team_id][0]]
+                else:
+                    print_df(description)
 
     return df
 
@@ -246,9 +267,10 @@ if __name__ == "__main__":
     dfPredict = (
         dfTest.assign(
             predicted_winner=model.predict(dfTest.loc[FEATURES].values),
-            home_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
+            home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
+            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0], # Is this right?
         )
-    )[dfTest.columns.tolist() + ["predicted_winner", "home_win_prob"]]
+    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
 
     print("\nPredictions:")
     print(dfPredict.head())
