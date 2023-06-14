@@ -1,10 +1,86 @@
 # TODO: CLEAN UP CODE
 # MOVE TO A DIRECTORY -> nba-clutch-analysis
+# Add Docstrings and comments
+# Verify data by writing to csv
 from enum import IntEnum
 import requests
 import pandas as pd
 from collections import OrderedDict
 from sklearn.linear_model import LogisticRegression
+
+
+# TODO: MOVE TO SEPERATE FILE
+class Game:
+    def __init__(self, row):
+        self.season_id = row[0]
+        self.team_id = row[1]
+        self.team_abbreviation = row[2]
+        self.team_name = row[3]
+        self.game_id = row[4]
+        self.game_date = row[5]
+        self.matchup = row[6]
+        self.wl = row[7]
+        self.minutes = row[8]
+        self.points = row[9]
+        self.fgm = row[10]
+        self.fga = row[11]
+        self.fg_pct = row[12]
+        self.fg3m = row[13]
+        self.fg3a = row[14]
+        self.fg3_pct = row[15]
+        self.ftm = row[16]
+        self.fta = row[17]
+        self.ft_pct = row[18]
+        self.oreb = row[19]
+        self.dreb = row[20]
+        self.reb = row[21]
+        self.ast = row[22]
+        self.stl = row[23]
+        self.blk = row[24]
+        self.tov = row[25]
+        self.pf = row[26]
+        self.plus_minus = row[27]
+
+
+# TODO: MOVE TO SEPERATE FILE
+class PlayByPlay:
+    def __init__(self, row):
+        self.game_id = row[0]
+        self.event_num = row[1]
+        self.event_msg_type = row[2]
+        self.event_msg_action_type = row[3]
+        self.period = row[4]
+        self.wc_time_string = row[5]
+        self.pc_time_string = row[6]
+        self.home_description = row[7]
+        self.neutral_description = row[8]
+        self.visitor_description = row[9]
+        self.description = self.home_description or self.visitor_description
+        self.score = row[10]
+        self.score_margin = row[11]
+        self.person1_type = row[12]
+        self.player1_id = row[13]
+        self.player1_name = row[14]
+        self.player1_team_id = row[15]
+        self.player1_team_city = row[16]
+        self.player1_team_nickname = row[17]
+        self.player1_team_abbreviation = row[18]
+        self.person2_type = row[19]
+        self.player2_id = row[20]
+        self.player2_name = row[21]
+        self.player2_team_id = row[22]
+        self.player2_team_city = row[23]
+        self.player2_team_nickname = row[24]
+        self.player2_team_abbreviation = row[25]
+        self.person3_type = row[26]
+        self.player3_id = row[27]
+        self.player3_name = row[28]
+        self.player3_team_id = row[29]
+        self.player3_team_city = row[30]
+        self.player3_team_nickname = row[31]
+        self.player3_team_abbreviation = row[32]
+        self.video_available_flag = row[33]
+
 
 # TODO: MOVE TO SEPERATE FILE
 class EventMsgType(IntEnum):
@@ -19,9 +95,10 @@ class EventMsgType(IntEnum):
 
     @classmethod
     def has_event(cls, event):
-        return event in cls._value2member_map_ 
+        return event in cls._value2member_map_
 
 
+# MAYBE ADD TO .env file?
 BASE_URL = "https://stats.nba.com/stats/"
 HEADERS = {
     "Host": "stats.nba.com",
@@ -42,7 +119,7 @@ FEATURES = [
     "EVENTMSGTYPE",
     "EVENTMSGACTIONTYPE",
     "PERIOD",
-    "PCTIMESTRING", # TODO: CONVERT TO SECONDS
+    "PCTIMESTRING",  # TODO: CONVERT TO SECONDS
     "SCORE",
     "SCOREMARGIN",
 ]
@@ -112,11 +189,6 @@ def load_play_by_play(game_id):
         print("Request failed:", e)
         return None
 
-# TODO: DELETE ONCE DONE
-def print_df(description: str) -> None:
-    print()
-    if description: print("description:", description)
-    print()
 
 def get_clutch_events(season: str) -> pd.DataFrame:
     """Gets play-by-play data for clutch-time situations.
@@ -130,83 +202,103 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the play-by-play data for clutch-time situations.
     """
-    # Get game IDs. If the request fails, return to exit the function
+    # Load all games for the specified season
     data = load_games(season)
     if data is None:
         return
 
-    # Get the game IDs from the API response
-    # TODO: MOVE TO SEPARATE FUNCTION
-    games = {}
-    for game in data["resultSets"][0]["rowSet"]:
-        team_id, game_id, matchup, w_l = game[1], game[4], game[6], game[7]
+    games = extract_game_data(data)
 
-        if game_id not in games:
-            games[game_id] = {}
+    df = None
 
-        home_team, home_win = (True, int(w_l == "W")) if "vs." in matchup else (False, 0)
-
-        games[game_id][team_id] = [home_team, home_win]
-
-    # TODO: MOVE TO SEPARATE FUNCTION (ERROR CHECKING)
-    # print("Found", len(games), "games")
-    # print("Found", len(win_loss), "wins/losses")
-
-    # Get play-by-play data for each game ID
-    # TODO: PERFORM CUSTOM SORT FOR GAME_IDS FROM DATA STRUCTURES
-    for game_id, teams in OrderedDict(sorted(games.items())).items():
+    for game_id, teams in sort_games(games):
         print("Getting play-by-play data for game ID:", game_id)
         pbp_data = load_play_by_play(game_id)
         if pbp_data is None:
             print("No play-by-play data for game ID:", game_id)
             continue
 
-        # Create an empty DataFrame with the extracted column names
-        columns = pbp_data["resultSets"][0]["headers"] + ["Player", "HomeEvent", "HomeWin"]
-        df = pd.DataFrame(columns=columns)
-        
-        # Iterate through each play in the play-by-play data and filter for clutch-time situations
-        # Append each clutch-time play to the DataFrame
-        clutch = False
-        for row in pbp_data["resultSets"][0]["rowSet"]:
-            # TODO: Think about adding a PbpEvent class to handle this logic during initialization
-            event_msg_type = row[2]
-            event_msg_action_type = row[3]
-            gc_time = row[6]
-            home_description = row[7]
-            neutral_description = row[8]
-            visitor_description = row[9]
-            score_margin = row[11]
-            description = home_description or visitor_description
-            player1 = row[14]
-            player1_team_id = row[15]
-            player2 = row[21]
-            player2_team_id = row[22]
-            player3 = row[28]
-            player3_team_id = row[29]
-        
-            if gc_time and row[11]:  # game-clock/score margin
-                gc_time_minutes = int(gc_time.split(":")[0])
-                score_margin = int(score_margin) if score_margin != "TIE" else 0
-                clutch = gc_time_minutes <= 5 and abs(score_margin) <= 5
+        if df is None:
+            df = pd.DataFrame(columns=create_column_names(pbp_data))
 
-            if clutch and EventMsgType.has_event(event_msg_type) and player1:
-                primary_player = player1 or player1_team_id
-                primary_player_team_id = player1_team_id
-                df.loc[len(df.index)] = row + [primary_player] + teams[primary_player_team_id]
-                if event_msg_type == 1 and "AST" in description: # ASSISTS
-                    secondary_player = player2
-                    secondary_player_team_id = player2_team_id
-                    df.loc[len(df.index)] = row + [secondary_player] + teams[secondary_player_team_id]
-                elif event_msg_type == 2 and "BLK" in description: # BLOCKS
-                    secondary_player = player3
-                    secondary_player_team_id = player3_team_id
-                    df.loc[len(df.index)] = row + [secondary_player] + teams[secondary_player_team_id]
-                elif event_msg_type == 5 and "STL" in description: # STEALS
-                    secondary_player = player2
-                    secondary_player_team_id = player2_team_id
-                    df.loc[len(df.index)] = row + [secondary_player] + teams[secondary_player_team_id]
+        df = process_play_by_play(pbp_data, teams, df)
 
+    return df
+
+
+def extract_game_data(game_data):
+    games = {}
+    for game in game_data["resultSets"][0]["rowSet"]:
+        game_obj = Game(game)
+        game_id = game_obj.game_id
+
+        if game_id not in games:
+            games[game_id] = {}
+
+        team_id = game_obj.team_id
+        is_home_team = "vs." in game_obj.matchup
+        is_home_win = int(game_obj.wl == "W") if is_home_team else False
+
+        games[game_id][team_id] = [is_home_team, is_home_win]
+
+    return games
+
+
+def create_column_names(pbp_data):
+    pbp_data_columns = pbp_data["resultSets"][0]["headers"]
+    return pbp_data_columns + ["Player", "HomeEvent", "HomeWin"]
+
+
+def sort_games(games):
+    return OrderedDict(sorted(games.items())).items()
+
+
+def process_play_by_play(pbp_data, teams, df):
+    clutch = False
+    for row in pbp_data["resultSets"][0]["rowSet"]:
+        play = PlayByPlay(row)
+
+        if play.pc_time_string and play.score_margin:
+            clutch = is_clutch_time(play.pc_time_string, play.score_margin)
+
+        if clutch and EventMsgType.has_event(play.event_msg_type) and play.player1_id and play.player1_team_id:
+            primary_player = play.player1_name or play.player1_team_id
+            primary_player_team_id = play.player1_team_id
+            df = append_row_to_dataframe(df, row, primary_player, teams[primary_player_team_id])
+            if (play.event_msg_type == 1 and "AST" in play.description) or (
+                play.event_msg_type == 5 and "STL" in play.description
+            ):
+                secondary_player = play.player2_name
+                secondary_player_team_id = play.player2_team_id
+                df = append_row_to_dataframe(df, row, secondary_player, teams[secondary_player_team_id])
+            elif play.event_msg_type == 2 and "BLK" in play.description:
+                secondary_player = play.player3_name
+                secondary_player_team_id = play.player3_team_id
+                df = append_row_to_dataframe(df, row, secondary_player, teams[secondary_player_team_id])
+
+    return df
+
+
+def is_clutch_time(gc_time_string, score_margin):
+    gc_time_minutes = int(gc_time_string.split(":")[0])
+    score_margin = int(score_margin) if score_margin != "TIE" else 0
+    return gc_time_minutes <= 5 and abs(score_margin) <= 5
+
+
+def append_row_to_dataframe(df: pd.DataFrame, row: list, player: str, team: list) -> pd.DataFrame:
+    """Appends a new row to a DataFrame.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to append the row to.
+        row (list): The row to append to the DataFrame.
+        player (str): The player to append to the row.
+        team (list): The team to append to the row.
+
+    Returns:
+        pd.DataFrame: The DataFrame with the new row appended.
+    """
+    new_row = row + [player] + team
+    df.loc[len(df.index)] = new_row
     return df
 
 
@@ -248,7 +340,7 @@ if __name__ == "__main__":
 
     if not dfTrain or not dfTest:
         exit("\nNo data returned. Exiting...")
-    
+
     if dfTrain.empty or dfTest.empty:
         exit("\nNo data returned. Exiting...")
 
@@ -258,7 +350,7 @@ if __name__ == "__main__":
         dfTest.assign(
             predicted_winner=model.predict(dfTest.loc[FEATURES].values),
             home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
-            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0], # Is this right?
+            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # Is this right?
         )
     )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
 
