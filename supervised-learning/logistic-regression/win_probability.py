@@ -51,13 +51,13 @@ class PlayByPlay:
         self.event_msg_action_type = row[3]
         self.period = row[4]
         self.wc_time_string = row[5]
-        self.pc_time_string = row[6]
+        self.pc_time = self.convert_pc_time(row[6])
         self.home_description = row[7]
         self.neutral_description = row[8]
         self.visitor_description = row[9]
         self.description = self.home_description or self.visitor_description
         self.score = row[10]
-        self.score_margin = row[11]
+        self.score_margin = int(row[11]) if row[11] not in (None, "TIE") else 0
         self.person1_type = row[12]
         self.player1_id = row[13]
         self.player1_name = row[14]
@@ -80,6 +80,11 @@ class PlayByPlay:
         self.player3_team_nickname = row[31]
         self.player3_team_abbreviation = row[32]
         self.video_available_flag = row[33]
+    
+    def convert_pc_time(self, pc_time_string):
+        pc_time_minutes = int(pc_time_string.split(":")[0]) if pc_time_string else None
+        pc_time_seconds = int(pc_time_string.split(":")[1]) if pc_time_string else None
+        return pc_time_minutes * 60 + pc_time_seconds if pc_time_string else None
 
 
 # TODO: MOVE TO SEPERATE FILE
@@ -115,15 +120,16 @@ HEADERS = {
 }
 
 FEATURES = [
-    "EVENTNUM",
-    "EVENTMSGTYPE",
-    "EVENTMSGACTIONTYPE",
-    "PERIOD",
-    "PCTIMESTRING",  # TODO: CONVERT TO SECONDS
-    "SCORE",
-    "SCOREMARGIN",
+    "event_num",
+    "event_msg_type",
+    "event_msg_action_type",
+    "period",
+    "pc_time",
+    # "SCORE",
+    "score_margin",
+    # "home_poss",  # TODO: IMPLEMENT AS BINARY FLAG
 ]
-TARGET = "HOME_WIN"
+TARGET = "home_win"
 
 
 def load_games(season: str) -> dict:
@@ -210,16 +216,12 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     games = extract_game_data(data)
 
     df = None
-
     for game_id, teams in sort_games(games):
         print("Getting play-by-play data for game ID:", game_id)
         pbp_data = load_play_by_play(game_id)
         if pbp_data is None:
             print("No play-by-play data for game ID:", game_id)
             continue
-
-        if df is None:
-            df = pd.DataFrame(columns=create_column_names(pbp_data))
 
         df = process_play_by_play(pbp_data, teams, df)
 
@@ -244,12 +246,29 @@ def extract_game_data(game_data):
     return games
 
 
-def create_column_names(pbp_data):
-    pbp_data_columns = pbp_data["resultSets"][0]["headers"]
-    return pbp_data_columns + ["Player", "HomeEvent", "HomeWin"]
+def create_column_names(play):
+    """Creates a list of column names based on the attributes of the PlayByPlay class.
+
+    Args:
+        play (PlayByPlay): The PlayByPlay object containing the row data.
+
+    Returns:
+        list: A list of column names.
+    """
+    return [attr for attr in vars(play) if not attr.startswith("__")] + ["event_player", "home_poss", "home_win"]
 
 
 def sort_games(games):
+    """Sorts the games by game ID.
+
+    TODO: CUSTOM SORT SHOWING OFF DATA SRUCTURES AND ALGORITHMS
+
+    Args:
+        games (dict): The games to sort.
+    
+    Returns:
+        list: A list of tuples containing the game ID and the teams.
+    """
     return OrderedDict(sorted(games.items())).items()
 
 
@@ -258,47 +277,51 @@ def process_play_by_play(pbp_data, teams, df):
     for row in pbp_data["resultSets"][0]["rowSet"]:
         play = PlayByPlay(row)
 
-        if play.pc_time_string and play.score_margin:
-            clutch = is_clutch_time(play.pc_time_string, play.score_margin)
+        if play.pc_time and play.score_margin:
+            clutch = play.pc_time <= 300 and abs(play.score_margin) <= 5
 
         if clutch and EventMsgType.has_event(play.event_msg_type) and play.player1_id and play.player1_team_id:
             primary_player = play.player1_name or play.player1_team_id
-            primary_player_team_id = play.player1_team_id
-            df = append_row_to_dataframe(df, row, primary_player, teams[primary_player_team_id])
+            primary_team_id = play.player1_team_id
+            df = append_row_to_dataframe(df, play, primary_player, teams[primary_team_id])
             if (play.event_msg_type == 1 and "AST" in play.description) or (
                 play.event_msg_type == 5 and "STL" in play.description
             ):
                 secondary_player = play.player2_name
-                secondary_player_team_id = play.player2_team_id
-                df = append_row_to_dataframe(df, row, secondary_player, teams[secondary_player_team_id])
+                secondary_team_id = play.player2_team_id
+                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
             elif play.event_msg_type == 2 and "BLK" in play.description:
                 secondary_player = play.player3_name
-                secondary_player_team_id = play.player3_team_id
-                df = append_row_to_dataframe(df, row, secondary_player, teams[secondary_player_team_id])
+                secondary_team_id = play.player3_team_id
+                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
 
     return df
 
 
-def is_clutch_time(gc_time_string, score_margin):
-    gc_time_minutes = int(gc_time_string.split(":")[0])
-    score_margin = int(score_margin) if score_margin != "TIE" else 0
-    return gc_time_minutes <= 5 and abs(score_margin) <= 5
-
-
-def append_row_to_dataframe(df: pd.DataFrame, row: list, player: str, team: list) -> pd.DataFrame:
+def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: list) -> pd.DataFrame:
     """Appends a new row to a DataFrame.
 
     Args:
         df (pd.DataFrame): The DataFrame to append the row to.
-        row (list): The row to append to the DataFrame.
+        play (PlayByPlay): The PlayByPlay object containing the row data.
         player (str): The player to append to the row.
         team (list): The team to append to the row.
 
     Returns:
         pd.DataFrame: The DataFrame with the new row appended.
     """
-    new_row = row + [player] + team
-    df.loc[len(df.index)] = new_row
+    if df is None:
+        df = pd.DataFrame(columns=create_column_names(play))
+
+    # Retrieve instance variables using vars() and filter out those starting with "__"
+    new_row = [vars(play)[attr] for attr in vars(play) if not attr.startswith("__")]
+    
+    # Extend the new_row list with the player and team values
+    new_row.extend([player] + team)
+
+    # Append the new row to the DataFrame
+    df.loc[len(df)] = new_row
+    
     return df
 
 
@@ -334,6 +357,9 @@ def evaluate_model(df: pd.DataFrame, model: LogisticRegression) -> None:
 if __name__ == "__main__":
     print("\nGetting Training Data...")
     dfTrain = get_clutch_events("2021-22")
+
+    print(dfTrain.tail())
+    exit()
 
     print("\nGetting Test Data...")
     dfTest = get_clutch_events("2022-23")
