@@ -143,19 +143,25 @@ def extract_game_data(game_data):
     
     Returns:
         dict: A dictionary containing the game data.
+            game_id -> {team_id -> [is_home_team, is_home_win]}
     """
 
     games = {}
     for game in game_data["resultSets"][0]["rowSet"]:
         game_obj = Game(game)
+
         game_id = game_obj.game_id
+        team_id = game_obj.team_id
 
         if game_id not in games:
             games[game_id] = {}
 
-        team_id = game_obj.team_id
+        # Determine if the home team and whether the home team won
         is_home_team = "vs." in game_obj.matchup
-        is_home_win = int(game_obj.wl == "W") if is_home_team else False
+        if is_home_team: 
+            is_home_win = int(game_obj.wl == "W")
+        else:
+            is_home_win = int(game_obj.wl == "L")
 
         games[game_id][team_id] = [is_home_team, is_home_win]
 
@@ -201,29 +207,143 @@ def process_play_by_play(pbp_data, teams, df):
     """
     clutch = False
     home_poss = None
+
     for row in pbp_data["resultSets"][0]["rowSet"]:
         play = PlayByPlay(row)
 
-        if play.pc_time and play.score_margin:
-            clutch = play.pc_time <= 300 and abs(play.score_margin) <= 5
+        clutch = determine_clutch(play)
 
-        if clutch and EventMsgType.has_event(play.event_msg_type) and play.player1_id and play.player1_team_id:
-            primary_player = play.player1_name or play.player1_team_id
-            primary_team_id = play.player1_team_id
-            df = append_row_to_dataframe(df, play, primary_player, teams[play.player1_team_id])
-            if (play.event_msg_type == 1 and "AST" in play.description) or (
-                play.event_msg_type == 5 and "STL" in play.description
-            ):
-                secondary_player = play.player2_name
-                # secondary_team_id = play.player2_team_id
-                df = append_row_to_dataframe(df, play, secondary_player, teams[play.player1_team_id])
-            elif play.event_msg_type == 2 and "BLK" in play.description:
-                secondary_player = play.player3_name
-                # secondary_team_id = play.player3_team_id
-                df = append_row_to_dataframe(df, play, secondary_player, teams[play.player1_team_id])
-            print(df.tail(5))
+        if clutch and is_valid_play(play):
+            primary_player, primary_team_id = determine_primary_player_and_team(play)
+            is_home_team, is_home_win = teams[primary_team_id]
+
+            home_poss = determine_home_possession(play, is_home_team)
+            play.set_home_possession(home_poss)
+            play.set_home_win(is_home_win)
+
+            if is_assist(play) or is_steal(play):
+                secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 2)
+                teams[secondary_team_id][0] = home_poss
+                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
+            elif is_block(play):
+                secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 3)
+                teams[secondary_team_id][0] = home_poss
+                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
 
     return df
+
+
+def determine_clutch(play):
+    """Determines if a play is considered clutch based on its time and score margin.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        bool: True if the play is clutch, False otherwise.
+    """
+    if play.pc_time and play.score_margin:
+        return play.pc_time <= 300 and abs(play.score_margin) <= 5
+    return False
+
+
+def is_valid_play(play):
+    """Checks if a play is a valid play based on its event message type and player/team information.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        bool: True if the play is a valid play, False otherwise.
+    """
+    return (
+        EventMsgType.has_event(play.event_msg_type) and
+        play.player1_id and play.player1_team_id
+    )
+
+
+def determine_primary_player_and_team(play):
+    """Determines the primary player and team for a play.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        tuple: A tuple containing the primary player and team ID.
+    """
+    primary_player = play.player1_name or play.player2_name
+    primary_team_id = play.player1_team_id or play.player2_team_id
+    return primary_player, primary_team_id
+
+
+def determine_home_possession(play, is_home_team):
+    """Determines the home possession based on the play and whether the primary team is the home team.
+
+    Args:
+        play (PlayByPlay): The play object.
+        is_home_team (bool): True if the primary team is the home team, False otherwise.
+
+    Returns:
+        bool or None: True if it's a home possession, False if it's an away possession, None if unknown.
+    """
+    if EventMsgType.non_rebound_event(play.event_msg_type):
+        return is_home_team
+    return None
+
+
+def is_assist(play):
+    """Checks if a play is an assist.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        bool: True if the play is an assist, False otherwise.
+    """
+    return play.event_msg_type == 1 and "AST" in play.description
+
+
+def is_steal(play):
+    """Checks if a play is a steal.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        bool: True if the play is a steal, False otherwise.
+    """
+    return play.event_msg_type == 5 and "STL" in play.description
+
+
+def is_block(play):
+    """Checks if a play is a block.
+
+    Args:
+        play (PlayByPlay): The play object.
+
+    Returns:
+        bool: True if the play is a block, False otherwise.
+    """
+    return play.event_msg_type == 2 and "BLK" in play.description
+
+
+def determine_secondary_player_and_team(play, player_num):
+    """Determines the secondary player and team for a play based on the player number.
+
+    Args:
+        play (PlayByPlay): The play object.
+        player_num (int): The player number (2 for assist/steal, 3 for block).
+
+    Returns:
+        tuple: A tuple containing the secondary player and team ID.
+    """
+    if player_num == 2: # assist/steal
+        secondary_player = play.player2_name
+        secondary_team_id = play.player2_team_id
+    elif player_num == 3: # block
+        secondary_player = play.player3_name
+        secondary_team_id = play.player3_team_id
+    return secondary_player, secondary_team_id
 
 
 def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: list) -> pd.DataFrame:
@@ -241,8 +361,8 @@ def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: lis
     if df is None:
         df = pd.DataFrame(columns=create_column_names(play))
 
-    # play.is_home_possession(team)
-    play.is_home_win(team)
+    # play.set_home_possession(team)
+    # play.set_home_win(team)
 
     # Retrieve instance variables using vars() and filter out those starting with "__"
     new_row = [vars(play)[attr] for attr in vars(play) if not attr.startswith("__")]

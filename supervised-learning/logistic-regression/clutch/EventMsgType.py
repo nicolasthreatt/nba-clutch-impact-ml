@@ -14,3 +14,9 @@ class EventMsgType(IntEnum):
     @classmethod
     def has_event(cls, event):
         return event in cls._value2member_map_
+
+    @classmethod
+    def non_rebound_event(cls, event):
+        if event != cls.REBOUND:
+            return True
+        return False

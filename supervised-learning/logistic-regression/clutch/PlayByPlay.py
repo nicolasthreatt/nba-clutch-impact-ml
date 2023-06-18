@@ -45,14 +45,8 @@ class PlayByPlay:
         pc_time_seconds = int(pc_time_string.split(":")[1]) if pc_time_string else None
         return pc_time_minutes * 60 + pc_time_seconds if pc_time_string else None
 
-    def is_home_possession(self, team):
-        if self.event_msg_type in [
-            EventMsgType.FIELD_GOAL_MADE,
-            EventMsgType.FIELD_GOAL_MISSED,
-            EventMsgType.FREE_THROW,
-            EventMsgType.TURNOVER
-        ]:
-            self.home_possession = team[0]
+    def set_home_possession(self, home_poss):
+            self.home_possession = home_poss
 
-    def is_home_win(self, team):
-        self.home_win = int(team[1])
+    def set_home_win(self, home_win):
+        self.home_win = home_win
