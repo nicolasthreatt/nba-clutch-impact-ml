@@ -1,106 +1,10 @@
-# TODO: CLEAN UP CODE
-# MOVE TO A DIRECTORY -> nba-clutch-analysis
-# Add Docstrings and comments
-# Verify data by writing to csv
-import requests
+# data_processing.py
 import pandas as pd
+from api import load_games, load_play_by_play
 from collections import OrderedDict
-from sklearn.linear_model import LogisticRegression
 from EventMsgType import EventMsgType
 from Game import Game
 from PlayByPlay import PlayByPlay
-
-# MAYBE ADD TO .env file?
-BASE_URL = "https://stats.nba.com/stats/"
-HEADERS = {
-    "Host": "stats.nba.com",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "x-nba-stats-origin": "stats",
-    "x-nba-stats-token": "true",
-    "Connection": "keep-alive",
-    "Referer": "https://stats.nba.com/",
-    "Pragma": "no-cache",
-    "Cache-Control": "no-cache",
-}
-
-FEATURES = [
-    "event_num",
-    "event_msg_type",
-    "event_msg_action_type",
-    "period",
-    "pc_time",
-    # "SCORE",
-    "score_margin",
-    # "home_poss",  # TODO: IMPLEMENT AS BINARY FLAG
-]
-TARGET = "home_win"
-
-
-def load_games(season: str) -> dict:
-    """Loads game data from the leaguegamefinder NBA API.
-
-    Returns:
-        dict: The game data returned by the API, or None if the request failed.
-
-    Raises:
-        requests.exceptions.RequestException: If the API request fails.
-    """
-    params = {
-        "PlayerOrTeam": "T",
-        "LeagueID": "00",
-        "Season": season,
-        "SeasonType": "Regular Season",
-    }
-
-    try:
-        response = requests.get(
-            BASE_URL + "leaguegamefinder",
-            headers=HEADERS,
-            params=params,
-            timeout=10,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data
-    except requests.exceptions.RequestException as e:
-        print("Request failed:", e)
-        return None
-
-
-def load_play_by_play(game_id):
-    """Loads play-by-play data for a specific game ID.
-
-    Args:
-        game_id (str): The ID of the game.
-
-    Returns:
-        dict: The play-by-play data returned by the API, or None if the request failed.
-
-    Raises:
-        requests.exceptions.RequestException: If the API request fails.
-    """
-    pbp_params = {
-        "GameID": game_id,
-        "StartPeriod": 4,
-        "EndPeriod": 10,
-    }
-
-    try:
-        response = requests.get(
-            BASE_URL + "playbyplayv2",
-            headers=HEADERS,
-            params=pbp_params,
-            timeout=10,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data
-    except requests.exceptions.RequestException as e:
-        print("Request failed:", e)
-        return None
 
 
 def get_clutch_events(season: str) -> pd.DataFrame:
@@ -361,9 +265,6 @@ def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: lis
     if df is None:
         df = pd.DataFrame(columns=create_column_names(play))
 
-    # play.set_home_possession(team)
-    # play.set_home_win(team)
-
     # Retrieve instance variables using vars() and filter out those starting with "__"
     new_row = [vars(play)[attr] for attr in vars(play) if not attr.startswith("__")]
     
@@ -375,62 +276,3 @@ def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: lis
     
     return df
 
-
-def create_model(dfTrain: pd.DataFrame) -> LogisticRegression:
-    """Creates a logistic regression model.
-
-    Args:
-        dfTrain (pd.DataFrame): The training data.
-
-    Returns:
-        sklearn.linear_model.LogisticRegression: A logistic regression model.
-    """
-
-    X = dfTrain.loc[FEATURES].values
-    y = dfTrain.loc[TARGET].values
-
-    return LogisticRegression().fit(X, y)
-
-
-def evaluate_model(df: pd.DataFrame, model: LogisticRegression) -> None:
-    """Evaluates a logistic regression model.
-
-    Args:
-        df (pd.DataFrame): Data to evaluate the model on.
-        model (sklearn.linear_model.LogisticRegression): The logistic regression model.
-    """
-    X = df.loc[FEATURES].values
-    y = df.loc[TARGET].values
-
-    print("\nAccuracy:", model.score(X, y))
-
-
-if __name__ == "__main__":
-    print("\nGetting Training Data...")
-    dfTrain = get_clutch_events("2021-22")
-
-    print(dfTrain.tail())
-    exit()
-
-    print("\nGetting Test Data...")
-    dfTest = get_clutch_events("2022-23")
-
-    if not dfTrain or not dfTest:
-        exit("\nNo data returned. Exiting...")
-
-    if dfTrain.empty or dfTest.empty:
-        exit("\nNo data returned. Exiting...")
-
-    model = create_model(dfTrain)
-
-    dfPredict = (
-        dfTest.assign(
-            predicted_winner=model.predict(dfTest.loc[FEATURES].values),
-            home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
-            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # Is this right?
-        )
-    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
-
-    print("\nPredictions:")
-    print(dfPredict.head())
-    print(evaluate_model(dfTest, model))
