@@ -19,7 +19,6 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the play-by-play data for clutch-time situations.
     """
-    # Load all games for the specified season
     data = load_games(season)
     if data is None:
         return

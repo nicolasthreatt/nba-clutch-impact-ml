@@ -41,3 +41,33 @@ def evaluate_model(df: pd.DataFrame, model: LogisticRegression) -> None:
     y = df.loc[TARGET].values
 
     print("\nAccuracy:", model.score(X, y))
+
+
+def calculate_win_probs(dfTest: pd.DataFrame, lr: LogisticRegression, season: int) -> pd.DataFrame:
+    """Calculcates the home and away teams win probability for each play-by-play clutch event.
+
+    Args:
+        dfTest: DataFrame representation of the test set.
+        lr: Trained Logistical Regression model.
+        season: Season which to train data on (format: XYYYY, where X is season type and YYYY is year).
+    
+    Returns:
+        Pandas dataframe with original input columns along with the home and away teams win probability
+        for each play-by-play clutch event.
+    """
+
+    # For the specified season,
+    # predict the winner and home team win probability for each event in the play-by-play data
+    dfPredict = (
+        dfTest.assign(
+            predicted_winner=model.predict(dfTest.loc[FEATURES].values),
+            home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
+            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # Is this right?
+        )
+    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
+
+    # Calcuate the away team's win probability
+    # dfPredict['away_team_win_probability'] = 1 - dfPredict['home_team_win_probability']
+
+    # Return the new dataframe with 0 fill in for any null data
+    return dfPredict.fillna(0)

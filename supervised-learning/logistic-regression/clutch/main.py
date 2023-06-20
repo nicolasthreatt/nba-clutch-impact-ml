@@ -1,4 +1,3 @@
-import pandas as pd
 from data_processing import get_clutch_events
 from model import create_model, evaluate_model
 
@@ -20,14 +19,6 @@ if __name__ == "__main__":
         exit("\nNo data returned. Exiting...")
 
     model = create_model(dfTrain)
-
-    dfPredict = (
-        dfTest.assign(
-            predicted_winner=model.predict(dfTest.loc[FEATURES].values),
-            home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
-            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # Is this right?
-        )
-    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
 
     print("\nPredictions:")
     print(dfPredict.head())
