@@ -2,17 +2,18 @@
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
+
 FEATURES = [
     "event_num",
     "event_msg_type",
     "event_msg_action_type",
     "period",
     "pc_time",
-    # "SCORE",
     "score_margin",
     "home_poss",
 ]
 TARGET = "home_win"
+
 
 def create_model(dfTrain: pd.DataFrame) -> LogisticRegression:
     """Creates a logistic regression model.
@@ -43,26 +44,24 @@ def evaluate_model(df: pd.DataFrame, model: LogisticRegression) -> None:
     print("\nAccuracy:", model.score(X, y))
 
 
-def calculate_win_probs(dfTest: pd.DataFrame, lr: LogisticRegression, season: int) -> pd.DataFrame:
+def calculate_win_probs(dfTest: pd.DataFrame, lr: LogisticRegression) -> pd.DataFrame:
     """Calculcates the home and away teams win probability for each play-by-play clutch event.
 
     Args:
         dfTest: DataFrame representation of the test set.
         lr: Trained Logistical Regression model.
-        season: Season which to train data on (format: XYYYY, where X is season type and YYYY is year).
     
     Returns:
         Pandas dataframe with original input columns along with the home and away teams win probability
         for each play-by-play clutch event.
     """
 
-    # For the specified season,
-    # predict the winner and home team win probability for each event in the play-by-play data
+    # Predict the winner of each game and each team's win probability for each play-by-play event
     dfPredict = (
         dfTest.assign(
             predicted_winner=model.predict(dfTest.loc[FEATURES].values),
             home_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 1],
-            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # Is this right?
+            away_team_win_prob=model.predict_proba(dfTest.loc[FEATURES].values)[:, 0],  # TODO: Is this right?
         )
     )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
 
