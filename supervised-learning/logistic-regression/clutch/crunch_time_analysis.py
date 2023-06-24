@@ -117,18 +117,18 @@ def get_crunch_time_score(df):
     """
 
     df['Crunch_Time_Score'] = np.where(
-        (df['home_poss'] == 1), df['delta_home_team_win_probability'],
+        (df['home_possession'] == 1), df['delta_home_team_win_probability'],
         np.where(
-            (df['home_poss'] == 0), df['delta_away_team_win_probability'], 0
+            (df['home_possession'] == 0), df['delta_away_team_win_probability'], 0
         )
     )
 
     df['Crunch_Time_Score'] = ( # TODO: SEE IF THIS IS NEEDED
         np.where(       
-            (df['home_poss'] == 1) & (df["event_msg_type"] == EventMsgType.TURNOVER) & (df['description'].str.contains("STL")),
+            (df['home_possession'] == 1) & (df["event_msg_type"] == EventMsgType.TURNOVER) & (df['description'].str.contains("STL")),
                 df['delta_away_team_win_probability'],
         np.where(
-            (df['home_poss'] == 0) & (df["event_msg_type"] == EventMsgType.TURNOVER) &  (df['description'].str.contains("STL")),
+            (df['home_possession'] == 0) & (df["event_msg_type"] == EventMsgType.TURNOVER) &  (df['description'].str.contains("STL")),
                 df['delta_home_team_win_probability'], df['Crunch_Time_Score']
         ))
     )

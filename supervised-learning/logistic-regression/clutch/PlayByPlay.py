@@ -1,3 +1,4 @@
+# PlayByPlay.py
 from EventMsgType import EventMsgType
 
 class PlayByPlay:
@@ -45,8 +46,8 @@ class PlayByPlay:
         pc_time_seconds = int(pc_time_string.split(":")[1]) if pc_time_string else None
         return pc_time_minutes * 60 + pc_time_seconds if pc_time_string else None
 
-    def set_home_possession(self, home_poss):
-            self.home_possession = home_poss
+    def set_home_possession(self, home_possession):
+            self.home_possession = home_possession
 
     def set_home_win(self, home_win):
         self.home_win = home_win

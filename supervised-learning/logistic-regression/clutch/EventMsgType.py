@@ -1,4 +1,4 @@
-
+# EventMsgType.py
 from enum import IntEnum
 
 class EventMsgType(IntEnum):

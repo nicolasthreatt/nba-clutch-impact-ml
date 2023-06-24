@@ -1,3 +1,5 @@
+https://www.linkedin.com/learning-login/share?forceAccount=false&redirect=https%3A%2F%2Fwww.linkedin.com%2Flearning%2Fmachine-learning-with-scikit-learn%3Ftrk%3Dshare_ent_url%26shareId%3DByaBL%252FroR8KRpKZP4vbYDw%253D%253D
+
 Supervised Learning
     - Most common form on machine learning is supervised learning
     - Algorithm learns the relationship between a features matrix and a target vector 

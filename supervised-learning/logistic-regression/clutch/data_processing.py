@@ -33,6 +33,9 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             print("No play-by-play data for game ID:", game_id)
             continue
 
+        if df is not None and df.home_win.unique().size == 2:
+            break
+
         df = process_play_by_play(pbp_data, teams, df)
 
     return df
@@ -109,7 +112,7 @@ def process_play_by_play(pbp_data, teams, df):
         pd.DataFrame: A DataFrame containing the play-by-play data.
     """
     clutch = False
-    home_poss = None
+    home_possession = None
 
     for row in pbp_data["resultSets"][0]["rowSet"]:
         play = PlayByPlay(row)
@@ -120,17 +123,17 @@ def process_play_by_play(pbp_data, teams, df):
             primary_player, primary_team_id = determine_primary_player_and_team(play)
             is_home_team, is_home_win = teams[primary_team_id]
 
-            home_poss = determine_home_possession(play, is_home_team)
-            play.set_home_possession(home_poss)
+            home_possession = determine_home_possession(play, is_home_team)
+            play.set_home_possession(home_possession)
             play.set_home_win(is_home_win)
 
             if is_assist(play) or is_steal(play):
                 secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 2)
-                teams[secondary_team_id][0] = home_poss
+                teams[secondary_team_id][0] = home_possession
                 df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
             elif is_block(play):
                 secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 3)
-                teams[secondary_team_id][0] = home_poss
+                teams[secondary_team_id][0] = home_possession
                 df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
 
     return df
@@ -139,11 +142,14 @@ def process_play_by_play(pbp_data, teams, df):
 def determine_clutch(play):
     """Determines if a play is considered clutch based on its time and score margin.
 
+    A clutch play is defined as a play that occurs during the last 5 minutes of the 4th quarter or overtime,
+    where the score margin is 5 points or less.
+
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play event object.
 
     Returns:
-        bool: True if the play is clutch, False otherwise.
+        bool: True if the play occurs during clutch time, False otherwise.
     """
     if play.pc_time and play.score_margin:
         return play.pc_time <= 300 and abs(play.score_margin) <= 5
@@ -153,8 +159,10 @@ def determine_clutch(play):
 def is_valid_play(play):
     """Checks if a play is a valid play based on its event message type and player/team information.
 
+    Only looking for plays that are a field goal attempt, free throw attempt, turnover, or rebound.
+
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play event object.
 
     Returns:
         bool: True if the play is a valid play, False otherwise.
@@ -169,7 +177,7 @@ def determine_primary_player_and_team(play):
     """Determines the primary player and team for a play.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play event object.
 
     Returns:
         tuple: A tuple containing the primary player and team ID.
@@ -183,7 +191,7 @@ def determine_home_possession(play, is_home_team):
     """Determines the home possession based on the play and whether the primary team is the home team.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play event object.
         is_home_team (bool): True if the primary team is the home team, False otherwise.
 
     Returns:
@@ -198,7 +206,7 @@ def is_assist(play):
     """Checks if a play is an assist.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play object.
 
     Returns:
         bool: True if the play is an assist, False otherwise.
@@ -210,7 +218,7 @@ def is_steal(play):
     """Checks if a play is a steal.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play object.
 
     Returns:
         bool: True if the play is a steal, False otherwise.
@@ -222,7 +230,7 @@ def is_block(play):
     """Checks if a play is a block.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play object.
 
     Returns:
         bool: True if the play is a block, False otherwise.
@@ -234,7 +242,7 @@ def determine_secondary_player_and_team(play, player_num):
     """Determines the secondary player and team for a play based on the player number.
 
     Args:
-        play (PlayByPlay): The play object.
+        play (PlayByPlay): The play by play object.
         player_num (int): The player number (2 for assist/steal, 3 for block).
 
     Returns:
@@ -274,4 +282,3 @@ def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: lis
     df.loc[len(df)] = new_row
     
     return df
-
