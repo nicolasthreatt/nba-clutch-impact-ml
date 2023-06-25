@@ -4,6 +4,7 @@ from EventMsgType import EventMsgType
 class PlayByPlay:
     def __init__(self, row):
         self.game_id = row[0]
+        self.season = self.game_id[3:5]
         self.event_num = row[1]
         self.event_msg_type = row[2]
         self.event_msg_action_type = row[3]

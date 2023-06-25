@@ -4,7 +4,7 @@ import numpy as np
 from EventMsgType import EventMsgType
 
 
-def generate_crunch_time_scores(df, aggregation_columns):
+def generate_crunch_time_scores(df, aggregation_columns=["season", "event_player"]):
     """Compute crunch time scores.
     
     Args:
@@ -56,14 +56,14 @@ def get_prior_win_probability(df_predict: pd.DataFrame, team_win_probability: st
     Returns:
         pd.Series: Pandas Series containing the prior win probability for each play-by-play event.
     """
-    df_predict["pbpEventNum"] = (
+    df_predict["subseq"] = (
         df_predict
         .groupby(['season','game_id','period','pc_time'])
         .cumcount() + 1
     )
 
     return np.where(
-        (df_predict['pbpEventNum'] == 1),
+        (df_predict['subseq'] == 1),
         (
             df_predict
             .sort_values(
@@ -95,13 +95,10 @@ def calculate_delta_win_probability(df_predict, team_win_probability):
     Returns:
         pd.Series: Pandas Series containing the change in win probability for each play-by-play event.
     """
+    # TODO: RECHECK LOGIC
     return np.where(
-        (
-            df_predict[f'prior_{team_win_probability}'].isnull() &
-            ~df_predict['EventTypeText'].str.contains("Missed")
-        ),
-        df_predict[team_win_probability],
-        df_predict[team_win_probability] - df_predict[f'prior_{team_win_probability}']
+        df_predict[f'prior_{team_win_probability}'].notnull(),
+            df_predict[team_win_probability] - df_predict[f'prior_{team_win_probability}'], 0.0
     )
 
 

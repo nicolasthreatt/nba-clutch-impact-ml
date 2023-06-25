@@ -84,10 +84,10 @@ def predict_win_probs(dfTest: pd.DataFrame, lr: LogisticRegression) -> pd.DataFr
     dfPredict = (
         dfTest.assign(
             predicted_winner=lr.predict(X),
-            home_team_win_prob=lr.predict_proba(X)[:, 1],
-            away_team_win_prob=lr.predict_proba(X)[:, 0],
+            home_team_win_probability=lr.predict_proba(X)[:, 1],
+            away_team_win_probability=lr.predict_proba(X)[:, 0],
         )
-    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_prob", "away_team_win_prob"]]
+    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_probability", "away_team_win_probability"]]
 
     # Return the new dataframe with 0 fill in for any null data
     return dfPredict.fillna(0)
