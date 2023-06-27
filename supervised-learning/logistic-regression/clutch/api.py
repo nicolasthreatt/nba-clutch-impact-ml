@@ -1,6 +1,6 @@
+# api.py
 import requests
 
-# MAYBE ADD TO .env file?
 BASE_URL = "https://stats.nba.com/stats/"
 HEADERS = {
     "Host": "stats.nba.com",
@@ -47,7 +47,7 @@ def load_games(season: str) -> dict:
         return None
 
 
-def load_play_by_play(game_id):
+def load_play_by_play(game_id: str) -> dict:
     """Loads play-by-play data for a specific game ID.
 
     Args:

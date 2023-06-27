@@ -4,7 +4,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
 
-# constants.py
 FEATURES = [
     "event_num",
     "event_msg_type",
@@ -17,7 +16,7 @@ FEATURES = [
 TARGET = "home_win"
 
 
-def preprocess_data(df) -> pd.DataFrame:
+def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     """Preprocesses the data.
 
     Logistic Regression requires data be scaled to have a mean of 0 and a standard deviation of 1.

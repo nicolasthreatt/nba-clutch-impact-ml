@@ -1,28 +1,28 @@
-# crunch_time_analysis.py
+# clutch_impact_analysis.py
 import pandas as pd
 import numpy as np
 from EventMsgType import EventMsgType
 
 
-def generate_crunch_time_scores(df, aggregation_columns=["season", "event_player"]):
-    """Compute crunch time scores.
+def generate_clutch_impact_ratings(df: pd.DataFrame, aggregation_columns=["season", "event_player"]) -> pd.DataFrame:
+    """Compute clutch impact ratings for each player based on the input aggregation columns.
     
     Args:
         df (pd.DataFrame): DataFrame representation of the test set's predicted results.
-        aggregation_columns (list): Column names to aggregate the crunch time scores.
+        aggregation_columns (list): Column names to aggregate the clutch impact ratings.
 
     Returns:
-        pd.DataFrame: Pandas DataFrame with original input columns along with the crunch time score for each play-by-play clutch event.
+        pd.DataFrame: Pandas DataFrame with the clutch impact ratings for each player.
     """
 
     df = calculate_teams_win_probability_changes(df)
-    df = get_crunch_time_score(df)
+    df = calculate_clutch_impact_ratings(df)
 
     return (
-        df.groupby(aggregation_columns)['Crunch_Time_Score']
+        df.groupby(aggregation_columns)['clutch_impact_rtg']
         .sum()
         .reset_index()
-        .sort_values(by='Crunch_Time_Score', ascending=False)
+        .sort_values(by='clutch_impact_rtg', ascending=False)
     )
 
 
@@ -95,45 +95,44 @@ def calculate_delta_win_probability(df_predict, team_win_probability):
     Returns:
         pd.Series: Pandas Series containing the change in win probability for each play-by-play event.
     """
-    # TODO: RECHECK LOGIC
     return np.where(
         df_predict[f'prior_{team_win_probability}'].notnull(),
             df_predict[team_win_probability] - df_predict[f'prior_{team_win_probability}'], 0.0
     )
 
 
-def get_crunch_time_score(df):
-    """Compute the crunch time score for each play-by-play event.
+def calculate_clutch_impact_ratings(df):
+    """Compute the clutch impact for each play-by-play event.
 
     Args:
         df (pd.DataFrame): DataFrame representation of the test set's predicted results.
 
     Returns:
         pd.DataFrame: Pandas DataFrame with original input columns along with
-                      the crunch time score for each play-by-play clutch event.
+                      the clutch impact for each play-by-play clutch event.
     """
 
-    df['Crunch_Time_Score'] = np.where(
+    df['clutch_impact_rtg'] = np.where(
         (df['home_possession'] == 1), df['delta_home_team_win_probability'],
         np.where(
             (df['home_possession'] == 0), df['delta_away_team_win_probability'], 0
         )
     )
 
-    df['Crunch_Time_Score'] = ( # TODO: SEE IF THIS IS NEEDED
+    df['clutch_impact_rtg'] = ( # TODO: SEE IF THIS IS NEEDED
         np.where(       
             (df['home_possession'] == 1) & (df["event_msg_type"] == EventMsgType.TURNOVER) & (df['description'].str.contains("STL")),
                 df['delta_away_team_win_probability'],
         np.where(
             (df['home_possession'] == 0) & (df["event_msg_type"] == EventMsgType.TURNOVER) &  (df['description'].str.contains("STL")),
-                df['delta_home_team_win_probability'], df['Crunch_Time_Score']
+                df['delta_home_team_win_probability'], df['clutch_impact_rtg']
         ))
     )
 
-    df['Crunch_Time_Score'] = np.where(
+    df['clutch_impact_rtg'] = np.where(
         (df["event_msg_type"] == EventMsgType.FIELD_GOAL_MADE) & df['description'].str.contains("AST"),
-            df['Crunch_Time_Score'] / 2,
-            df['Crunch_Time_Score']
+            round(df['clutch_impact_rtg'] / 2 * 100, 2),
+            round(df['clutch_impact_rtg'] * 100, 2)
     )
 
     return df

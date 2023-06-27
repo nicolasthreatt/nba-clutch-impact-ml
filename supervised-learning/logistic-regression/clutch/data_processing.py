@@ -41,7 +41,7 @@ def get_clutch_events(season: str) -> pd.DataFrame:
     return df
 
 
-def extract_game_data(game_data):
+def extract_game_data(game_data: dict) -> dict:
     """Extracts game data from the game data returned by the leaguegamefinder API.
 
     Args:
@@ -74,7 +74,7 @@ def extract_game_data(game_data):
     return games
 
 
-def create_column_names(play):
+def create_column_names(play: PlayByPlay) -> list:
     """Creates a list of column names based on the attributes of the PlayByPlay class.
 
     Args:
@@ -86,7 +86,7 @@ def create_column_names(play):
     return [attr for attr in vars(play) if not attr.startswith("__")] + ["event_player"]
 
 
-def sort_games(games):
+def sort_games(games: dict) -> list:
     """Sorts the games by game ID.
 
     TODO: CUSTOM SORT SHOWING OFF DATA SRUCTURES AND ALGORITHMS
@@ -100,7 +100,7 @@ def sort_games(games):
     return OrderedDict(sorted(games.items())).items()
 
 
-def process_play_by_play(pbp_data, teams, df):
+def process_play_by_play(pbp_data: dict, teams: dict, df: pd.DataFrame) -> pd.DataFrame:
     """Processes the play-by-play data returned by the playbyplayv2 API.
 
     Args:
@@ -117,7 +117,7 @@ def process_play_by_play(pbp_data, teams, df):
     for row in pbp_data["resultSets"][0]["rowSet"]:
         play = PlayByPlay(row)
 
-        clutch = determine_clutch(play)
+        clutch = is_clutch(play)
 
         if clutch and is_valid_play(play):
             primary_player, primary_team_id = determine_primary_player_and_team(play)
@@ -139,8 +139,8 @@ def process_play_by_play(pbp_data, teams, df):
     return df
 
 
-def determine_clutch(play):
-    """Determines if a play is considered clutch based on its time and score margin.
+def is_clutch(play: PlayByPlay) -> bool:
+    """Checks if a play is considered clutch based on its time and score margin.
 
     A clutch play is defined as a play that occurs during the last 5 minutes of the 4th quarter or overtime,
     where the score margin is 5 points or less.
@@ -156,7 +156,7 @@ def determine_clutch(play):
     return False
 
 
-def is_valid_play(play):
+def is_valid_play(play: PlayByPlay) -> bool:
     """Checks if a play is a valid play based on its event message type and player/team information.
 
     Only looking for plays that are a field goal attempt, free throw attempt, turnover, or rebound.
@@ -173,7 +173,7 @@ def is_valid_play(play):
     )
 
 
-def determine_primary_player_and_team(play):
+def determine_primary_player_and_team(play: PlayByPlay) -> tuple:
     """Determines the primary player and team for a play.
 
     Args:
@@ -187,7 +187,7 @@ def determine_primary_player_and_team(play):
     return primary_player, primary_team_id
 
 
-def determine_home_possession(play, is_home_team):
+def determine_home_possession(play: PlayByPlay, is_home_team: bool) -> bool or None:
     """Determines the home possession based on the play and whether the primary team is the home team.
 
     Args:
@@ -202,7 +202,7 @@ def determine_home_possession(play, is_home_team):
     return None
 
 
-def is_assist(play):
+def is_assist(play: PlayByPlay) -> bool:
     """Checks if a play is an assist.
 
     Args:
@@ -214,7 +214,7 @@ def is_assist(play):
     return play.event_msg_type == 1 and "AST" in play.description
 
 
-def is_steal(play):
+def is_steal(play: PlayByPlay) -> bool:
     """Checks if a play is a steal.
 
     Args:
@@ -226,7 +226,7 @@ def is_steal(play):
     return play.event_msg_type == 5 and "STL" in play.description
 
 
-def is_block(play):
+def is_block(play: PlayByPlay) -> bool:
     """Checks if a play is a block.
 
     Args:
@@ -238,7 +238,7 @@ def is_block(play):
     return play.event_msg_type == 2 and "BLK" in play.description
 
 
-def determine_secondary_player_and_team(play, player_num):
+def determine_secondary_player_and_team(play: PlayByPlay, player_num: int) -> tuple:
     """Determines the secondary player and team for a play based on the player number.
 
     Args:

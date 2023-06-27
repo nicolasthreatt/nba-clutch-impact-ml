@@ -1,4 +1,6 @@
-from crunch_time_analysis import generate_crunch_time_scores
+
+# main.py
+from clutch_impact_analysis import generate_clutch_impact_ratings
 from data_processing import get_clutch_events
 from model import create_model, evaluate_model, predict_win_probs
 from plots import plot_accurary
@@ -28,6 +30,6 @@ if __name__ == "__main__":
     print(dfPredict.head())
     # plot_accurary(dfPredict)
 
-    dfClutchScores = generate_crunch_time_scores(dfPredict)
+    dfClutchScores = generate_clutch_impact_ratings(dfPredict)
     print("\nCrunch Time Scores:")
     print(dfClutchScores.head())
