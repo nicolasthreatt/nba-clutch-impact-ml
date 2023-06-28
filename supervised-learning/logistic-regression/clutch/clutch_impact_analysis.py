@@ -6,6 +6,10 @@ from EventMsgType import EventMsgType
 
 def generate_clutch_impact_ratings(df: pd.DataFrame, aggregation_columns=["season", "event_player"]) -> pd.DataFrame:
     """Compute clutch impact ratings for each player based on the input aggregation columns.
+
+    Clutch impact rating shows how a player impacts team winning in the clutch.
+    Impact is measured by the change in win probability for each clutch event.
+    This will cause plays such as buzzer beaters to have a higher impact rating.
     
     Args:
         df (pd.DataFrame): DataFrame representation of the test set's predicted results.
@@ -14,7 +18,6 @@ def generate_clutch_impact_ratings(df: pd.DataFrame, aggregation_columns=["seaso
     Returns:
         pd.DataFrame: Pandas DataFrame with the clutch impact ratings for each player.
     """
-
     df = calculate_teams_win_probability_changes(df)
     df = calculate_clutch_impact_ratings(df)
 
@@ -56,36 +59,26 @@ def get_prior_win_probability(df_predict: pd.DataFrame, team_win_probability: st
     Returns:
         pd.Series: Pandas Series containing the prior win probability for each play-by-play event.
     """
-    df_predict["subseq"] = (
-        df_predict
-        .groupby(['season','game_id','period','pc_time'])
-        .cumcount() + 1
+    df_predict["subseq"] = df_predict.groupby(['season', 'game_id', 'period', 'pc_time']).cumcount() + 1
+
+    prior_win_probability = np.where(
+        df_predict['subseq'] == 1,
+            # First event in the sequence, shift by 1 to get the prior win probability
+            df_predict.sort_values(
+                by=['season', 'game_id', 'period', 'pc_time'],
+                ascending=[False, True, True, False]
+            ).groupby(['game_id'])[team_win_probability].shift(1),
+            # Second event in the sequence, shift by 2 to get the prior win probability
+            df_predict.sort_values(
+                by=['season', 'game_id', 'period', 'pc_time'],
+                ascending=[False, True, True, False]
+            ).groupby(['game_id'])[team_win_probability].shift(2)
     )
 
-    return np.where(
-        (df_predict['subseq'] == 1),
-        (
-            df_predict
-            .sort_values(
-                by=['season','game_id','period','pc_time'],
-                ascending=[False,True,True,False]
-            )
-            .groupby(['game_id'])[team_win_probability]
-            .shift(1)
-        ),
-        (
-            df_predict
-            .sort_values(
-                by=['season','game_id','period','pc_time'],
-                ascending=[False,True,True,False]
-            )
-            .groupby(['game_id'])[team_win_probability]
-            .shift(2)
-        )
-    )
+    return prior_win_probability
 
 
-def calculate_delta_win_probability(df_predict, team_win_probability):
+def calculate_delta_win_probability(df_predict: pd.DataFrame, team_win_probability: str) -> np.ndarray:
     """Calculates the change in win probability for a given team.
 
     Args:
@@ -101,7 +94,7 @@ def calculate_delta_win_probability(df_predict, team_win_probability):
     )
 
 
-def calculate_clutch_impact_ratings(df):
+def calculate_clutch_impact_ratings(df: pd.DataFrame) -> pd.DataFrame:
     """Compute the clutch impact for each play-by-play event.
 
     Args:
@@ -111,7 +104,6 @@ def calculate_clutch_impact_ratings(df):
         pd.DataFrame: Pandas DataFrame with original input columns along with
                       the clutch impact for each play-by-play clutch event.
     """
-
     df['clutch_impact_rtg'] = np.where(
         (df['home_possession'] == 1), df['delta_home_team_win_probability'],
         np.where(

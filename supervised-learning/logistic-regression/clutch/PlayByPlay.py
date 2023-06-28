@@ -42,7 +42,7 @@ class PlayByPlay:
         self.home_possession = None
         self.home_win = None
     
-    def convert_pc_time(self, pc_time_string):
+    def convert_pc_time(self, pc_time_string: str) -> int:
         pc_time_minutes = int(pc_time_string.split(":")[0]) if pc_time_string else None
         pc_time_seconds = int(pc_time_string.split(":")[1]) if pc_time_string else None
         return pc_time_minutes * 60 + pc_time_seconds if pc_time_string else None
