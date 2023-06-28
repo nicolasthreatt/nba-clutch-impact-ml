@@ -1,7 +1,7 @@
-# clutch_impact_analysis.py
+# impact_analysis.py
 import pandas as pd
 import numpy as np
-from EventMsgType import EventMsgType
+from src.classes.EventMsgType import EventMsgType
 
 
 def generate_clutch_impact_ratings(df: pd.DataFrame, aggregation_columns=["season", "event_player"]) -> pd.DataFrame:

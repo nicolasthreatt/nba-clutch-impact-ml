@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-def plot_accurary(df: pd.DataFrame) -> None:
+def model_accurary(df: pd.DataFrame) -> None:
     
     fig, ax = plt.subplots(figsize=(15, 10))
     

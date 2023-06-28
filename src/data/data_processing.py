@@ -1,10 +1,10 @@
 # data_processing.py
 import pandas as pd
-from api import load_games, load_play_by_play
+from src.api.api import load_games, load_play_by_play
 from collections import OrderedDict
-from EventMsgType import EventMsgType
-from Game import Game
-from PlayByPlay import PlayByPlay
+from src.classes.EventMsgType import EventMsgType
+from src.classes.Game import Game
+from src.classes.PlayByPlay import PlayByPlay
 
 
 def get_clutch_events(season: str) -> pd.DataFrame:

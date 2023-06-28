@@ -22,3 +22,8 @@ Logistic Regression Models:
         + Model training and predictions are relatively fast
         + No tuning is usually required
         + Performs will with a small number of observations
+        + Outputs well-calibrated predicted probabilities
+    - Disadvantages
+        + Performance is (generally) not competitive with the best supervised learning methods
+        + Can only learn linear relationships
+        + Can't automatically learn feature interactions

@@ -1,5 +1,4 @@
 # PlayByPlay.py
-from EventMsgType import EventMsgType
 
 class PlayByPlay:
     def __init__(self, row):
