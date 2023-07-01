@@ -33,9 +33,6 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             print("No play-by-play data for game ID:", game_id)
             continue
 
-        if df is not None and df.home_win.unique().size == 2:
-            break
-
         df = process_play_by_play(pbp_data, teams, df)
 
     return df
