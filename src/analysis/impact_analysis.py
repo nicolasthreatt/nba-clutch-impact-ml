@@ -111,16 +111,16 @@ def calculate_clutch_impact_ratings(df: pd.DataFrame) -> pd.DataFrame:
         )
     )
 
-    df['clutch_impact_rtg'] = ( # TODO: SEE IF THIS IS NEEDED
-        np.where(       
-            (df['home_possession'] == 1) & (df["event_msg_type"] == EventMsgType.TURNOVER) & (df['description'].str.contains("STL")),
-                df['delta_away_team_win_probability'],
-        np.where(
-            (df['home_possession'] == 0) & (df["event_msg_type"] == EventMsgType.TURNOVER) &  (df['description'].str.contains("STL")),
-                df['delta_home_team_win_probability'], df['clutch_impact_rtg']
-        ))
-    )
-
+    # df['clutch_impact_rtg'] = ( # TODO: SEE IF THIS IS NEEDED
+    #     np.where(       
+    #         (df['home_possession'] == 1) & (df["event_msg_type"] == EventMsgType.TURNOVER) & (df['description'].str.contains("STL")),
+    #             df['delta_away_team_win_probability'],
+    #     np.where(
+    #         (df['home_possession'] == 0) & (df["event_msg_type"] == EventMsgType.TURNOVER) &  (df['description'].str.contains("STL")),
+    #             df['delta_home_team_win_probability'], df['clutch_impact_rtg']
+    #     ))
+    # )
+    print(df.head())
     df['clutch_impact_rtg'] = np.where(
         (df["event_msg_type"] == EventMsgType.FIELD_GOAL_MADE) & df['description'].str.contains("AST"),
             round(df['clutch_impact_rtg'] / 2 * 100, 2),

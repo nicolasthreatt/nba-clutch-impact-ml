@@ -5,13 +5,13 @@ from sklearn.preprocessing import StandardScaler
 
 
 FEATURES = [
-    "event_num",
-    "event_msg_type",
-    "event_msg_action_type",
-    "period",
-    "pc_time",
-    "score_margin",
-    "home_possession",
+    "event_num_scaled",
+    "event_msg_type_scaled",
+    "event_msg_action_type_scaled",
+    "period_scaled",
+    "pc_time_scaled",
+    "score_margi_scaledn",
+    "home_possession_scaled",
 ]
 TARGET = "home_win"
 
@@ -29,7 +29,10 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The preprocessed data.
     """
     scaler = StandardScaler()
+    for feature in FEATURES:
+        df[feature] = df[feature.replace("_scaled", '')]
     df[FEATURES] = scaler.fit_transform(df[FEATURES])
+
     return df
 
 

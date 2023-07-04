@@ -1,4 +1,4 @@
-# main.py
+# batch.py
 from src.analysis.impact_analysis import generate_clutch_impact_ratings
 from src.data.data_processing import get_clutch_events
 from src.model.model import create_model, evaluate_model, predict_win_probs
@@ -16,10 +16,11 @@ if __name__ == "__main__":
 
     print("\nTraining Model...")
     model = create_model(dfTrain)
-    # evaluate_model(dfTrain, model)
+    evaluate_model(dfTrain, model)
 
     print("\nPredicting Win Probabilities...")
     dfPredict = predict_win_probs(dfTest, model)
+    print(dfPredict.head())
 
     print("\nGenerating Clutch Impact Ratings...")
     dfClutchScores = generate_clutch_impact_ratings(dfPredict)
