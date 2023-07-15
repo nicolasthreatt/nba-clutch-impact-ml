@@ -10,7 +10,7 @@ FEATURES = [
     "event_msg_action_type_scaled",
     "period_scaled",
     "pc_time_scaled",
-    "score_margi_scaledn",
+    "score_margin_scaled",
     "home_possession_scaled",
 ]
 TARGET = "home_win"
@@ -29,8 +29,9 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The preprocessed data.
     """
     scaler = StandardScaler()
-    for feature in FEATURES:
-        df[feature] = df[feature.replace("_scaled", '')]
+    # for feature in FEATURES:
+    #     df[feature] = df[feature.replace("_scaled", '')]
+    df[FEATURES] = df[FEATURES].apply(lambda x: x.str.replace("_scaled", ""))
     df[FEATURES] = scaler.fit_transform(df[FEATURES])
 
     return df

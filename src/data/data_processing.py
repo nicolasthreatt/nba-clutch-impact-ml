@@ -34,6 +34,8 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             continue
 
         df = process_play_by_play(pbp_data, teams, df)
+        print(df)
+        # print(df.head(1))
 
     return df
 
