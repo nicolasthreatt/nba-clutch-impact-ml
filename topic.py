@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+# TODO: MOVE BACK TO src/strreaming/
 import json
 import requests
 import time
 import threading
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
+from src.classes.PlayByPlay import PlayByPlayLive
 
 TOPIC = "play-by-test"
 
@@ -42,8 +44,8 @@ class Producer(threading.Thread):
                 json_data = response.json()
                 play_by_play = json_data['game']['actions']
                 for action in play_by_play:
-                    producer.send(TOPIC, value=json.dumps(action).encode('utf-8'))
-                    print(action)
+                    play_by_play = PlayByPlayLive(action)
+                    producer.send(TOPIC, value=json.dumps(play_by_play.__dict__).encode('utf-8'))
                 break
 
             time.sleep(5)  # Adjust the interval as needed
@@ -78,6 +80,7 @@ class Consumer(threading.Thread):
 
 def main():
     # Create 'topic_name' Kafka topic
+    # Use try-except to avoid error if topic already exists
     try:
         admin = KafkaAdminClient(bootstrap_servers='localhost:9092')
         topic = NewTopic(name='topic_name', num_partitions=1, replication_factor=1)
@@ -85,12 +88,14 @@ def main():
     except Exception:
         pass
 
+    # Create threads of a producer and a consumer
     tasks = [Producer(), Consumer()]
 
     # Start threads of a producer and a consumer to 'topic_name' Kafka topic
     for t in tasks:
         t.start()
 
+    # Sleep for 10 seconds
     time.sleep(10)
 
     # Stop threads

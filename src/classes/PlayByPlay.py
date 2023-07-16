@@ -1,4 +1,5 @@
 # PlayByPlay.py
+from src.classes.EventMsgType import EventMsgType
 
 class PlayByPlay:
     def __init__(self, row):
@@ -57,6 +58,7 @@ class PlayByPlayLive:
     def __init__(self, row):
         self.action_number = row['actionNumber'] if 'actionNumber' in row else None
         self.clock = row['clock'] if 'clock' in row else None
+        self.pc_time = self.convert_pc_time() if self.clock else None
         self.time_actual = row['timeActual'] if 'timeActual' in row else None
         self.period = row['period'] if 'period' in row else None
         self.period_type = row['periodType'] if 'periodType' in row else None
@@ -74,8 +76,9 @@ class PlayByPlayLive:
         self.side = row['side'] if 'side' in row else None
         self.shot_distance = row['shotDistance'] if 'shotDistance' in row else None
         self.possession = row['possession'] if 'possession' in row else None
-        self.score_home = row['scoreHome'] if 'scoreHome' in row else None
-        self.score_away = row['scoreAway'] if 'scoreAway' in row else None
+        self.score_home = int(row['scoreHome']) if 'scoreHome' in row else None
+        self.score_away = int(row['scoreAway']) if 'scoreAway' in row else None
+        self.score_margin = self.score_home - self.score_away if all([self.score_home, self.score_away]) else None
         self.edited = row['edited'] if 'edited' in row else None
         self.order_number = row['orderNumber'] if 'orderNumber' in row else None
         self.x_legacy = row['xLegacy'] if 'xLegacy' in row else None
@@ -89,27 +92,24 @@ class PlayByPlayLive:
         self.person_ids_filter = row['personIdsFilter'] if 'personIdsFilter' in row else None
         self.home_possession = int(bool(self.team_id == self.possession))
 
-    def convert_pc_time_to_seconds(pc_time_string: str) -> int:
+    def convert_pc_time(self, pc_time_string: str) -> int:
         """Converts a string representing the time remaining in a period to an integer
            representing the number of seconds remaining in the period.
-
-        Args:
-            pc_time_string (str): The string representing the time remaining in a period.
 
         Returns:
             int: The number of seconds remaining in the period.
         """
         # Check if the string is empty
-        if not pc_time_string:
+        if not self.pc_time_string:
             return None
     
         # Remove the 'PT' prefix and 'S' suffix
-        pc_time_string = pc_time_string[2:-1]
+        self.pc_time_string = self.pc_time_string[2:-1]
         
         # Check if 'M' exists in the string
-        if 'M' in pc_time_string:
+        if 'M' in self.pc_time_string:
             # Split the string into minutes and seconds
-            minutes, seconds = pc_time_string.split('M')
+            minutes, seconds = self.pc_time_string.split('M')
             
             # Remove any leading zeros from the minutes
             minutes = minutes.lstrip('0')
@@ -125,7 +125,7 @@ class PlayByPlayLive:
             total_seconds = minutes * 60 + seconds
         else:
             # Remove any leading zeros and the decimal point from the seconds
-            seconds = pc_time_string.rstrip('0').rstrip('.')
+            seconds = self.pc_time_string.rstrip('0').rstrip('.')
             
             # Convert seconds to an integer
             seconds = int(seconds) if seconds else 0
@@ -133,3 +133,9 @@ class PlayByPlayLive:
             total_seconds = seconds
         
         return total_seconds
+
+    def determine_event_num():
+        pass
+
+    def determine_event_msg():
+        pass
