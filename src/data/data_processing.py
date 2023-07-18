@@ -34,8 +34,6 @@ def get_clutch_events(season: str) -> pd.DataFrame:
             continue
 
         df = process_play_by_play(pbp_data, teams, df)
-        print(df)
-        # print(df.head(1))
 
     return df
 
@@ -116,7 +114,7 @@ def process_play_by_play(pbp_data: dict, teams: dict, df: pd.DataFrame) -> pd.Da
     for row in pbp_data["resultSets"][0]["rowSet"]:
         play = PlayByPlay(row)
 
-        clutch = is_clutch(play)
+        clutch = is_clutch(play) if is_clutch(play) != None else clutch
 
         if clutch and is_valid_play(play):
             primary_player, primary_team_id = determine_primary_player_and_team(play)
@@ -152,7 +150,6 @@ def is_clutch(play: PlayByPlay) -> bool:
     """
     if play.pc_time and play.score_margin:
         return play.pc_time <= 300 and abs(play.score_margin) <= 5
-    return False
 
 
 def is_valid_play(play: PlayByPlay) -> bool:

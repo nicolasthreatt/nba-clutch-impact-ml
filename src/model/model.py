@@ -5,13 +5,13 @@ from sklearn.preprocessing import StandardScaler
 
 
 FEATURES = [
-    "event_num_scaled",
     "event_msg_type_scaled",
-    "event_msg_action_type_scaled",
+    # "event_msg_action_type_scaled",
     "period_scaled",
     "pc_time_scaled",
     "score_margin_scaled",
     "home_possession_scaled",
+    # "home_event_scaled", # TODO: (stls vs turn and blks vs miss)
 ]
 TARGET = "home_win"
 

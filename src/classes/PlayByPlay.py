@@ -67,6 +67,7 @@ class PlayByPlayLive:
         self.action_type = row['actionType'] if 'actionType' in row else None
         self.sub_type = row['subType'] if 'subType' in row else None
         self.descriptor = row['descriptor'] if 'descriptor' in row else None
+        self.event_msg_type = self.determine_event_msg_type()
         self.qualifiers = row['qualifiers'] if 'qualifiers' in row else None
         self.person_id = row['personId'] if 'personId' in row else None
         self.x = row['x'] if 'x' in row else None
@@ -134,8 +135,21 @@ class PlayByPlayLive:
         
         return total_seconds
 
-    def determine_event_num():
-        pass
-
-    def determine_event_msg():
-        pass
+    def determine_event_msg_type(self):
+        """Determines the event message type of the live play-by-play event."""
+        if self.action in ("2pt", "3pt"):
+            if "Made" in self.descriptor:
+                return EventMsgType.FIELD_GOAL_MADE
+            elif "Missed" in self.descriptor:
+                return EventMsgType.FIELD_GOAL_MISSED
+        elif self.action == "freethrow":
+            if "Made" in self.descriptor:
+                return EventMsgType.FREE_THROW_MADE
+            elif "Missed" in self.descriptor:
+                return EventMsgType.FREE_THROW_MISSED
+        elif self.action == "rebound":
+                return EventMsgType.REBOUND
+        elif self.action in ("steal", "turnover"):
+            return EventMsgType.TURNOVER
+        else:
+            return None

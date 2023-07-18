@@ -7,8 +7,9 @@ class EventMsgType(IntEnum):
     FREE_THROW = 3
     REBOUND = 4
     TURNOVER = 5
-    # FOUL = 6 # Think about how to get home vs away possession
-    # VIOLATION = 7 # Think about how to get home vs away possession
+    # BLK =  # TODO: NEEDED?
+    # FOUL = 6 # Think about how to get home vs away possession and player
+    # VIOLATION = 7 # Think about how to get home vs away possession and player
     # TIMEOUT = 9 # TODO: NEEDED?
 
     @classmethod
