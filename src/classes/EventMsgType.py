@@ -1,23 +1,17 @@
-# EventMsgType.py
-from enum import IntEnum
+from enum import Enum
 
-class EventMsgType(IntEnum):
-    FIELD_GOAL_MADE = 1
-    FIELD_GOAL_MISSED = 2
-    FREE_THROW = 3
-    REBOUND = 4
-    TURNOVER = 5
-    # BLK =  # TODO: NEEDED?
-    # FOUL = 6 # Think about how to get home vs away possession and player
-    # VIOLATION = 7 # Think about how to get home vs away possession and player
-    # TIMEOUT = 9 # TODO: NEEDED?
+class EventMsgType(str, Enum):
+    ASSIST = "Assist"
+    BLOCK =  "Block"
+    FIELD_GOAL_MADE = "Made Shot"
+    FIELD_GOAL_MISSED = "Missed Shot"
+    FOUL = "Foul"
+    FREE_THROW = "Free Throw"
+    REBOUND = "Rebound"
+    STEAL = "Steal"
+    TURNOVER = "Turnover"
+    VIOLATION = "Violation"
 
     @classmethod
-    def has_event(cls, event):
+    def has_event(cls, event: str) -> bool:
         return event in cls._value2member_map_
-
-    @classmethod
-    def non_rebound_event(cls, event):
-        if event != cls.REBOUND:
-            return True
-        return False
