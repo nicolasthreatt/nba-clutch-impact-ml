@@ -40,11 +40,6 @@ class PlayByPlay:
             play.action_type = "Block"
             play.event_msg_type = EventMsgType.BLOCK
 
-        # Foul Edge Case
-        # if play._is_foul():
-        #     play.action_type = "Foul"
-        #     play.event_msg_type = EventMsgType.FOUL
-
         # Steal Edge Case
         if play._is_steal():
             play.action_type = "Steal"
@@ -57,6 +52,12 @@ class PlayByPlay:
         play._set_scores(away_score, home_score, total_score)
 
         return play
+
+    def set_home_possession(self, home_possession: bool):
+        self.home_possession = home_possession
+
+    def set_home_win(self, home_win: bool):
+        self.home_win = home_win
 
     def _convert_clock_to_seconds(self, clock: Optional[str]) -> Optional[int]:
         if not clock:
@@ -84,15 +85,12 @@ class PlayByPlay:
     def _is_block(self) -> bool:
         return self.event_msg_type is None and "BLOCK" in self.description
 
-    def _is_foul(self) -> bool:
-        return self.event_msg_type is None and "FOUL" in self.description
-
     def _is_steal(self) -> bool:
         return self.event_msg_type is None and "STEAL" in self.description
 
     def _safe_int(self, value: str) -> Optional[int]:
         try:
-            return int(value) if isinstance(str, value) and value != '' else None
+            return int(value) if isinstance(value, str) and value != '' else None
         except (TypeError, ValueError):
             return None
 
@@ -117,9 +115,3 @@ class PlayByPlay:
 
         if self.home_score is not None and self.away_score is not None:
             self.score_margin = self.home_score - self.away_score
-
-    def set_home_possession(self, home_possession: bool):
-        self.home_possession = home_possession
-
-    def set_home_win(self, home_win: bool):
-        self.home_win = home_win
