@@ -1,155 +1,125 @@
-# PlayByPlay.py
+import math
+from typing import Optional
+
 from src.classes.EventMsgType import EventMsgType
 
+
 class PlayByPlay:
-    def __init__(self, row):
-        self.game_id = row[0]
-        self.season = self.game_id[3:5]
-        self.event_num = row[1]
-        self.event_msg_type = row[2]
-        self.event_msg_action_type = row[3]
-        self.period = row[4]
-        self.wc_time_string = row[5]
-        self.pc_time = self.convert_pc_time(row[6])
-        self.home_description = row[7]
-        self.neutral_description = row[8]
-        self.visitor_description = row[9]
-        self.description = self.home_description or self.visitor_description
-        self.score = row[10]
-        self.score_margin = int(row[11]) if row[11] not in (None, "TIE") else 0
-        self.person1_type = row[12]
-        self.player1_id = row[13]
-        self.player1_name = row[14]
-        self.player1_team_id = row[15]
-        self.player1_team_city = row[16]
-        self.player1_team_nickname = row[17]
-        self.player1_team_abbreviation = row[18]
-        self.person2_type = row[19]
-        self.player2_id = row[20]
-        self.player2_name = row[21]
-        self.player2_team_id = row[22]
-        self.player2_team_city = row[23]
-        self.player2_team_nickname = row[24]
-        self.player2_team_abbreviation = row[25]
-        self.person3_type = row[26]
-        self.player3_id = row[27]
-        self.player3_name = row[28]
-        self.player3_team_id = row[29]
-        self.player3_team_city = row[30]
-        self.player3_team_nickname = row[31]
-        self.player3_team_abbreviation = row[32]
-        self.video_available_flag = row[33]
+    def __init__(self):
         self.home_possession = None
         self.home_win = None
-    
-    def convert_pc_time(self, pc_time_string: str) -> int:
-        pc_time_minutes = int(pc_time_string.split(":")[0]) if pc_time_string else None
-        pc_time_seconds = int(pc_time_string.split(":")[1]) if pc_time_string else None
-        return pc_time_minutes * 60 + pc_time_seconds if pc_time_string else None
 
-    def set_home_possession(self, home_possession):
-            self.home_possession = home_possession
+    @classmethod
+    def from_action(cls, action: dict, game_id: str):
+        play = cls()
 
-    def set_home_win(self, home_win):
+        # Game Information
+        play.game_id = game_id
+        play.season = game_id[3:5]
+
+        # Team
+        play.team_id = action.get("teamId")
+
+        # Player
+        play.player_id = action.get("personId")
+        play.player_name = action.get("playerName")
+
+        # Time
+        play.period = int(action.get("period", 0))
+        play.pc_time = play._convert_clock_to_seconds(action.get("clock"))
+
+        # Event Infomation
+        play.description = action.get("description")
+        play.event_num = action.get("actionNumber")
+        play.action_type = action.get("actionType")
+        play.event_msg_type = EventMsgType.from_action_type(play.action_type)
+        play.event_msg_action_type = action.get("subType")
+
+        # Block Edge Case
+        if play._is_block():
+            play.action_type = "Block"
+            play.event_msg_type = EventMsgType.BLOCK
+
+        # Foul Edge Case
+        # if play._is_foul():
+        #     play.action_type = "Foul"
+        #     play.event_msg_type = EventMsgType.FOUL
+
+        # Steal Edge Case
+        if play._is_steal():
+            play.action_type = "Steal"
+            play.event_msg_type = EventMsgType.STEAL
+
+        # Scores
+        home_score = action.get("scoreHome")
+        away_score = action.get("scoreAway")
+        total_score = action.get("pointsTotal")
+        play._set_scores(away_score, home_score, total_score)
+
+        return play
+
+    def _convert_clock_to_seconds(self, clock: Optional[str]) -> Optional[int]:
+        if not clock:
+            return None
+
+        if clock.startswith("PT") and clock.endswith("S"):  # PTMMSS.SS
+            try:
+                minutes, seconds = clock[2:-1].split("M")  # Remove "PT" and Trailing "S"
+                return int(minutes) * 60 + math.floor(float(seconds))
+            except (ValueError, IndexError):
+                return None
+
+        if ":" in clock:  # MM:SS
+            try:
+                minutes, seconds = map(int, clock.split(":"))
+                return minutes * 60 + seconds
+            except ValueError:
+                return None
+
+        return None
+
+    def _is_assist(self) -> bool:
+        return self.event_msg_type == EventMsgType.FIELD_GOAL_MADE and "AST" in self.description
+
+    def _is_block(self) -> bool:
+        return self.event_msg_type is None and "BLOCK" in self.description
+
+    def _is_foul(self) -> bool:
+        return self.event_msg_type is None and "FOUL" in self.description
+
+    def _is_steal(self) -> bool:
+        return self.event_msg_type is None and "STEAL" in self.description
+
+    def _safe_int(self, value: str) -> Optional[int]:
+        try:
+            return int(value) if isinstance(str, value) and value != '' else None
+        except (TypeError, ValueError):
+            return None
+
+    def _set_scores(self, away_score: str, home_score: str, total_score: str):
+        self.away_score = self._safe_int(away_score)
+        self.home_score = self._safe_int(home_score)
+        self.total_score = self._safe_int(total_score)
+
+        self.score_margin = None
+        if self.home_score is not None and self.away_score is not None:
+            self.score_margin = self.home_score - self.away_score
+
+    def _update_scores_if_missing(self, away: int, home: int, total: int):
+        if self.away_score is None:
+            self.away_score = away
+
+        if self.home_score is None:
+            self.home_score = home
+
+        if self.total_score is None:
+            self.total_score = total
+
+        if self.home_score is not None and self.away_score is not None:
+            self.score_margin = self.home_score - self.away_score
+
+    def set_home_possession(self, home_possession: bool):
+        self.home_possession = home_possession
+
+    def set_home_win(self, home_win: bool):
         self.home_win = home_win
-
-
-class PlayByPlayLive:
-    def __init__(self, row):
-        self.action_number = row['actionNumber'] if 'actionNumber' in row else None
-        self.clock = row['clock'] if 'clock' in row else None
-        self.pc_time = self.convert_pc_time() if self.clock else None
-        self.time_actual = row['timeActual'] if 'timeActual' in row else None
-        self.period = row['period'] if 'period' in row else None
-        self.period_type = row['periodType'] if 'periodType' in row else None
-        self.team_id = row['teamId'] if 'teamId' in row else None
-        self.team_tricode = row['teamTricode'] if 'teamTricode' in row else None
-        self.action_type = row['actionType'] if 'actionType' in row else None
-        self.sub_type = row['subType'] if 'subType' in row else None
-        self.descriptor = row['descriptor'] if 'descriptor' in row else None
-        self.event_msg_type = self.determine_event_msg_type()
-        self.qualifiers = row['qualifiers'] if 'qualifiers' in row else None
-        self.person_id = row['personId'] if 'personId' in row else None
-        self.x = row['x'] if 'x' in row else None
-        self.y = row['y'] if 'y' in row else None
-        self.area = row['area'] if 'area' in row else None
-        self.area_detail = row['areaDetail'] if 'areaDetail' in row else None
-        self.side = row['side'] if 'side' in row else None
-        self.shot_distance = row['shotDistance'] if 'shotDistance' in row else None
-        self.possession = row['possession'] if 'possession' in row else None
-        self.score_home = int(row['scoreHome']) if 'scoreHome' in row else None
-        self.score_away = int(row['scoreAway']) if 'scoreAway' in row else None
-        self.score_margin = self.score_home - self.score_away if all([self.score_home, self.score_away]) else None
-        self.edited = row['edited'] if 'edited' in row else None
-        self.order_number = row['orderNumber'] if 'orderNumber' in row else None
-        self.x_legacy = row['xLegacy'] if 'xLegacy' in row else None
-        self.y_legacy = row['yLegacy'] if 'yLegacy' in row else None
-        self.is_field_goal = row['isFieldGoal'] if 'isFieldGoal' in row else None
-        self.shot_result = row['shotResult'] if 'shotResult' in row else None
-        self.points_total = row['pointsTotal'] if 'pointsTotal' in row else None
-        self.description = row['description'] if 'description' in row else None
-        self.player_name = row['playerName'] if 'playerName' in row else None
-        self.player_name_i = row['playerNameI'] if 'playerNameI' in row else None
-        self.person_ids_filter = row['personIdsFilter'] if 'personIdsFilter' in row else None
-        self.home_possession = int(bool(self.team_id == self.possession))
-
-    def convert_pc_time(self, pc_time_string: str) -> int:
-        """Converts a string representing the time remaining in a period to an integer
-           representing the number of seconds remaining in the period.
-
-        Returns:
-            int: The number of seconds remaining in the period.
-        """
-        # Check if the string is empty
-        if not self.pc_time_string:
-            return None
-    
-        # Remove the 'PT' prefix and 'S' suffix
-        self.pc_time_string = self.pc_time_string[2:-1]
-        
-        # Check if 'M' exists in the string
-        if 'M' in self.pc_time_string:
-            # Split the string into minutes and seconds
-            minutes, seconds = self.pc_time_string.split('M')
-            
-            # Remove any leading zeros from the minutes
-            minutes = minutes.lstrip('0')
-            
-            # Remove any leading zeros and the decimal point from the seconds
-            seconds = seconds.rstrip('0').rstrip('.')
-            
-            # Convert minutes and seconds to integers
-            minutes = int(minutes) if minutes else 0
-            seconds = int(seconds) if seconds else 0
-            
-            # Convert minutes to seconds and add to the total
-            total_seconds = minutes * 60 + seconds
-        else:
-            # Remove any leading zeros and the decimal point from the seconds
-            seconds = self.pc_time_string.rstrip('0').rstrip('.')
-            
-            # Convert seconds to an integer
-            seconds = int(seconds) if seconds else 0
-            
-            total_seconds = seconds
-        
-        return total_seconds
-
-    def determine_event_msg_type(self):
-        """Determines the event message type of the live play-by-play event."""
-        if self.action in ("2pt", "3pt"):
-            if "Made" in self.descriptor:
-                return EventMsgType.FIELD_GOAL_MADE
-            elif "Missed" in self.descriptor:
-                return EventMsgType.FIELD_GOAL_MISSED
-        elif self.action == "freethrow":
-            if "Made" in self.descriptor:
-                return EventMsgType.FREE_THROW_MADE
-            elif "Missed" in self.descriptor:
-                return EventMsgType.FREE_THROW_MISSED
-        elif self.action == "rebound":
-                return EventMsgType.REBOUND
-        elif self.action in ("steal", "turnover"):
-            return EventMsgType.TURNOVER
-        else:
-            return None
