@@ -1,8 +1,10 @@
 from enum import Enum
 
 class EventMsgType(str, Enum):
+    INVALID = "Invalid"
+
     ASSIST = "Assist"
-    BLOCK =  "Block"
+    BLOCK = "Block"
     FIELD_GOAL_MADE = "Made Shot"
     FIELD_GOAL_MISSED = "Missed Shot"
     FOUL = "Foul"
@@ -13,5 +15,7 @@ class EventMsgType(str, Enum):
     VIOLATION = "Violation"
 
     @classmethod
-    def has_event(cls, event: str) -> bool:
-        return event in cls._value2member_map_
+    def from_action_type(cls, action_type: str) -> "EventMsgType":
+        if not action_type:
+            return cls.INVALID
+        return cls(action_type) if action_type in cls._value2member_map_ else cls.INVALID
