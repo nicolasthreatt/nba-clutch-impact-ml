@@ -56,8 +56,8 @@ class ClutchDataProcessor:
         self,
         previous: PlayByPlay,
         play: PlayByPlay,
-        is_home_team: bool
-    ) -> Optional[bool]:
+        is_home_team: int
+    ) -> Optional[int]:
         """Determines if the play was associated with the home team."""
 
         offensive_events = {

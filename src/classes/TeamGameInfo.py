@@ -2,5 +2,5 @@ from dataclasses import dataclass
 
 @dataclass
 class TeamGameInfo:
-    is_home_team: bool
-    is_home_win: bool
+    is_home_team: int
+    is_home_win: int

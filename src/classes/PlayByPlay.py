@@ -53,10 +53,10 @@ class PlayByPlay:
 
         return play
 
-    def set_home_possession(self, home_possession: bool):
+    def set_home_possession(self, home_possession: int):
         self.home_possession = home_possession
 
-    def set_home_win(self, home_win: bool):
+    def set_home_win(self, home_win: int):
         self.home_win = home_win
 
     def _convert_clock_to_seconds(self, clock: Optional[str]) -> Optional[int]:
@@ -103,7 +103,7 @@ class PlayByPlay:
         if self.home_score is not None and self.away_score is not None:
             self.score_margin = self.home_score - self.away_score
 
-    def _update_scores_if_missing(self, away: int, home: int, total: int):
+    def _update_scores(self, away: int, home: int, total: int):
         if self.away_score is None:
             self.away_score = away
 
