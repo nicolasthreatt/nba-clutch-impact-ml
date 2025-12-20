@@ -1,280 +1,158 @@
-# data_processing.py
 import pandas as pd
-from src.api.api import load_games, load_play_by_play
-from collections import OrderedDict
+import time
+
+from typing import Any, Dict, List, Optional
+
+from src.api.api import API
 from src.classes.EventMsgType import EventMsgType
 from src.classes.Game import Game
 from src.classes.PlayByPlay import PlayByPlay
+from src.classes.TeamGameInfo import TeamGameInfo
+
+
+class ClutchDataProcessor:
+    """Processes NBA Play-By-Play data and extracts clutch events."""
+    def __init__(self):
+        self.api = API()
 
+    def get_clutch_events(self, season: str) -> pd.DataFrame:
+        """Stores clutch play-by-play events for a given season into a DataFrame."""
 
-def get_clutch_events(season: str) -> pd.DataFrame:
-    """Gets play-by-play data for clutch-time situations.
+        data = self.api.load_games(season)
+        if not data:
+            return pd.DataFrame()
 
-    Clutch-time situations are defined as the last 5 minutes of the 4th quarter
-    or overtime when the score differential is 5 points or less.
+        df = pd.DataFrame()
+        games = self._transform_game_data(data)
 
-    Args:
-        season (str): The season to get the data for.
+        for game_id, teams in sorted(games.items()):
+            time.sleep(0.5)
+            print("Getting play-by-play data for game ID:", game_id)
 
-    Returns:
-        pd.DataFrame: A DataFrame containing the play-by-play data for clutch-time situations.
-    """
-    data = load_games(season)
-    if data is None:
-        return
+            pbp_data = self.api.load_play_by_play(game_id)
+            if pbp_data is None:
+                print("No play-by-play data for game ID:", game_id)
+                continue
 
-    games = extract_game_data(data)
+            plays = self._transform_pbp_data(pbp_data, teams)
 
-    df = None
-    for game_id, teams in sort_games(games):
-        print("Getting play-by-play data for game ID:", game_id)
-        pbp_data = load_play_by_play(game_id)
-        if pbp_data is None:
-            print("No play-by-play data for game ID:", game_id)
-            continue
+            df = self._add_plays_to_dataframe(df, plays)
 
-        df = process_play_by_play(pbp_data, teams, df)
+        return df
 
-    return df
+    def _add_plays_to_dataframe(self, df: pd.DataFrame, plays: List[Dict]) -> pd.DataFrame:
+        """Adds a list of plays to a DataFrame and returns the updated DataFrame."""
+        if not plays:
+            return df
 
+        df_plays = pd.DataFrame(plays)
+        return pd.concat([df, df_plays], ignore_index=True)
 
-def extract_game_data(game_data: dict) -> dict:
-    """Extracts game data from the game data returned by the leaguegamefinder API.
+    def _is_clutch(self, play: PlayByPlay) -> bool:
+        """Last 5 minutes of 4th quarter or OT, where score margin is at most 5 points."""
+        return play.period >= 4 and play.pc_time <= 300 and abs(play.score_margin) <= 5
 
-    Args:
-        game_data (dict): The game data returned by the leaguegamefinder API.
-    
-    Returns:
-        dict: A dictionary containing the game data.
-            game_id -> {team_id -> [is_home_team, is_home_win]}
-    """
+    def _is_home_possession(
+        self,
+        previous: PlayByPlay,
+        play: PlayByPlay,
+        is_home_team: bool
+    ) -> Optional[bool]:
+        """Determines if the play was associated with the home team."""
 
-    games = {}
-    for game in game_data["resultSets"][0]["rowSet"]:
-        game_obj = Game(game)
+        offensive_events = {
+            EventMsgType.ASSIST,
+            EventMsgType.FIELD_GOAL_MADE,
+            EventMsgType.FIELD_GOAL_MISSED,
+            EventMsgType.FREE_THROW,
+            EventMsgType.TURNOVER,
+        }
 
-        game_id = game_obj.game_id
-        team_id = game_obj.team_id
+        defensive_events = {
+            EventMsgType.BLOCK,
+            EventMsgType.STEAL,
+        }
 
-        if game_id not in games:
-            games[game_id] = {}
+        if play.event_msg_type in offensive_events:
+            return is_home_team
 
-        # Determine if the home team and whether the home team won
-        is_home_team = "vs." in game_obj.matchup
-        if is_home_team: 
-            is_home_win = int(game_obj.wl == "W")
-        else:
-            is_home_win = int(game_obj.wl == "L")
+        if play.event_msg_type in defensive_events:
+            return not is_home_team
 
-        games[game_id][team_id] = [is_home_team, is_home_win]
+        if play.event_msg_type == EventMsgType.FOUL:
+            offensive_fouls = {"Loose Ball", "Offensive"}
+            if play.event_msg_action_type in offensive_fouls:
+                return is_home_team
 
-    return games
+            defensive_fouls = {"Personal", "Shooting"}
+            if play.event_msg_action_type in defensive_fouls:
+                return not is_home_team
 
+        if play.event_msg_type == EventMsgType.REBOUND:
+            is_offensive = previous.team_id == play.team_id
+            return is_home_team if is_offensive else not is_home_team
 
-def create_column_names(play: PlayByPlay) -> list:
-    """Creates a list of column names based on the attributes of the PlayByPlay class.
+        if play.event_msg_type == EventMsgType.VIOLATION:
+            is_defensive = "Defensive" in play.event_msg_action_type
+            return not is_home_team if is_defensive else is_home_team
 
-    Args:
-        play (PlayByPlay): The PlayByPlay object containing the row data.
+        return None
 
-    Returns:
-        list: A list of column names.
-    """
-    return [attr for attr in vars(play) if not attr.startswith("__")] + ["event_player"]
+    def _is_valid_play(self, play: PlayByPlay) -> bool:
+        """Checks whether a play contains mal data."""
+        return (
+            play.player_id is not None
+            and play.team_id is not None
+            and play.period is not None
+            and play.pc_time is not None
+            and play.score_margin is not None
+            and play.event_msg_type not in (None, EventMsgType.INVALID,)
+        )
 
+    def _transform_game_data(self, data: Dict[str, Any]) -> Dict[str, Dict[str, TeamGameInfo]]:
+        """Transforms extractheted leaguegamefinder data into a reformatted nested dictionary."""
 
-def sort_games(games: dict) -> list:
-    """Sorts the games by game ID.
+        games: Dict[str, Dict[str, TeamGameInfo]] = {}  # {game_id: {team_id: TeamGameInfo}}
 
-    TODO: CUSTOM SORT SHOWING OFF DATA SRUCTURES AND ALGORITHMS
+        for result in data.get("resultSets", [{}])[0].get("rowSet", []):
+            game = Game(result)
 
-    Args:
-        games (dict): The games to sort.
-    
-    Returns:
-        list: A list of tuples containing the game ID and the teams.
-    """
-    return OrderedDict(sorted(games.items())).items()
+            game_id = game.game_id
+            team_id = game.team_id
 
+            if game_id not in games:
+                games[game_id] = {}
 
-def process_play_by_play(pbp_data: dict, teams: dict, df: pd.DataFrame) -> pd.DataFrame:
-    """Processes the play-by-play data returned by the playbyplayv2 API.
+            is_home_team = "vs." in game.matchup
+            is_home_win = game.wl == "W" if is_home_team else game.wl == "L"
 
-    Args:
-        pbp_data (dict): The play-by-play data returned by the playbyplayv2 API.
-        teams (dict): The teams playing in the game.
-        df (pd.DataFrame): The DataFrame to append the data to.
+            games[game_id][team_id] = TeamGameInfo(is_home_team=is_home_team,is_home_win=is_home_win)
 
-    Returns:
-        pd.DataFrame: A DataFrame containing the play-by-play data.
-    """
-    clutch = False
-    home_possession = None
+        return games
 
-    for row in pbp_data["resultSets"][0]["rowSet"]:
-        play = PlayByPlay(row)
+    def _transform_pbp_data(self, data: Dict[str, Any], teams: Dict[str, TeamGameInfo]) -> List[PlayByPlay]:
+        """Transforms the play-by-play data into a list of PlayByPlay."""
 
-        clutch = is_clutch(play) if is_clutch(play) != None else clutch
+        plays: List[PlayByPlay] = []
+        previous: Optional[PlayByPlay] = None
 
-        if clutch and is_valid_play(play):
-            primary_player, primary_team_id = determine_primary_player_and_team(play)
-            is_home_team, is_home_win = teams[primary_team_id]
+        game = data.get("game", {})
+        actions = game.get("actions", [])
 
-            home_possession = determine_home_possession(play, is_home_team)
-            play.set_home_possession(home_possession)
-            play.set_home_win(is_home_win)
+        for action in actions:
+            play = PlayByPlay.from_action(action, game.get("gameId"))
+            scores = (play.away_score, play.home_score, play.total_score)
 
-            if is_assist(play) or is_steal(play):
-                secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 2)
-                teams[secondary_team_id][0] = home_possession
-                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
-            elif is_block(play):
-                secondary_player, secondary_team_id = determine_secondary_player_and_team(play, 3)
-                teams[secondary_team_id][0] = home_possession
-                df = append_row_to_dataframe(df, play, secondary_player, teams[secondary_team_id])
+            if isinstance(previous, PlayByPlay) and None in scores:
+                play._update_scores(previous.away_score, previous.home_score, previous.total_score)
 
-    return df
+            team_info = teams.get(play.team_id)
+            if self._is_valid_play(play) and self._is_clutch(play) and isinstance(team_info, TeamGameInfo):
+                play.set_home_possession(self._is_home_possession(previous, play, team_info.is_home_team))
+                play.set_home_win(team_info.is_home_win)
 
+                plays.append(vars(play))
 
-def is_clutch(play: PlayByPlay) -> bool:
-    """Checks if a play is considered clutch based on its time and score margin.
+            previous = play
 
-    A clutch play is defined as a play that occurs during the last 5 minutes of the 4th quarter or overtime,
-    where the score margin is 5 points or less.
-
-    Args:
-        play (PlayByPlay): The play by play event object.
-
-    Returns:
-        bool: True if the play occurs during clutch time, False otherwise.
-    """
-    if play.pc_time and play.score_margin:
-        return play.pc_time <= 300 and abs(play.score_margin) <= 5
-
-
-def is_valid_play(play: PlayByPlay) -> bool:
-    """Checks if a play is a valid play based on its event message type and player/team information.
-
-    Only looking for plays that are a field goal attempt, free throw attempt, turnover, or rebound.
-
-    Args:
-        play (PlayByPlay): The play by play event object.
-
-    Returns:
-        bool: True if the play is a valid play, False otherwise.
-    """
-    return (
-        EventMsgType.has_event(play.event_msg_type) and
-        play.player1_id and play.player1_team_id
-    )
-
-
-def determine_primary_player_and_team(play: PlayByPlay) -> tuple:
-    """Determines the primary player and team for a play.
-
-    Args:
-        play (PlayByPlay): The play by play event object.
-
-    Returns:
-        tuple: A tuple containing the primary player and team ID.
-    """
-    primary_player = play.player1_name or play.player2_name
-    primary_team_id = play.player1_team_id or play.player2_team_id
-    return primary_player, primary_team_id
-
-
-def determine_home_possession(play: PlayByPlay, is_home_team: bool) -> bool or None:
-    """Determines the home possession based on the play and whether the primary team is the home team.
-
-    Args:
-        play (PlayByPlay): The play by play event object.
-        is_home_team (bool): True if the primary team is the home team, False otherwise.
-
-    Returns:
-        bool or None: True if it's a home possession, False if it's an away possession, None if unknown.
-    """
-    if EventMsgType.non_rebound_event(play.event_msg_type):
-        return is_home_team
-    return None
-
-
-def is_assist(play: PlayByPlay) -> bool:
-    """Checks if a play is an assist.
-
-    Args:
-        play (PlayByPlay): The play by play object.
-
-    Returns:
-        bool: True if the play is an assist, False otherwise.
-    """
-    return play.event_msg_type == 1 and "AST" in play.description
-
-
-def is_steal(play: PlayByPlay) -> bool:
-    """Checks if a play is a steal.
-
-    Args:
-        play (PlayByPlay): The play by play object.
-
-    Returns:
-        bool: True if the play is a steal, False otherwise.
-    """
-    return play.event_msg_type == 5 and "STL" in play.description
-
-
-def is_block(play: PlayByPlay) -> bool:
-    """Checks if a play is a block.
-
-    Args:
-        play (PlayByPlay): The play by play object.
-
-    Returns:
-        bool: True if the play is a block, False otherwise.
-    """
-    return play.event_msg_type == 2 and "BLK" in play.description
-
-
-def determine_secondary_player_and_team(play: PlayByPlay, player_num: int) -> tuple:
-    """Determines the secondary player and team for a play based on the player number.
-
-    Args:
-        play (PlayByPlay): The play by play object.
-        player_num (int): The player number (2 for assist/steal, 3 for block).
-
-    Returns:
-        tuple: A tuple containing the secondary player and team ID.
-    """
-    if player_num == 2: # assist/steal
-        secondary_player = play.player2_name
-        secondary_team_id = play.player2_team_id
-    elif player_num == 3: # block
-        secondary_player = play.player3_name
-        secondary_team_id = play.player3_team_id
-    return secondary_player, secondary_team_id
-
-
-def append_row_to_dataframe(df: pd.DataFrame, play: list, player: str, team: list) -> pd.DataFrame:
-    """Appends a new row to a DataFrame.
-
-    Args:
-        df (pd.DataFrame): The DataFrame to append the row to.
-        play (PlayByPlay): The PlayByPlay object containing the row data.
-        player (str): The player to append to the row.
-        team (list): The team to append to the row.
-
-    Returns:
-        pd.DataFrame: The DataFrame with the new row appended.
-    """
-    if df is None:
-        df = pd.DataFrame(columns=create_column_names(play))
-
-    # Retrieve instance variables using vars() and filter out those starting with "__"
-    new_row = [vars(play)[attr] for attr in vars(play) if not attr.startswith("__")]
-    
-    # Extend the new_row list with the player responsible for the event
-    new_row.extend([player])
-
-    # Append the new row to the DataFrame
-    df.loc[len(df)] = new_row
-    
-    return df
+        return plays
