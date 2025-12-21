@@ -19,6 +19,8 @@ class PlayByPlay:
 
         # Team
         play.team_id = action.get("teamId")
+        # play.off_team_id = TODO
+        # play.def_team_id = TODO
 
         # Player
         play.player_id = action.get("personId")
@@ -29,20 +31,15 @@ class PlayByPlay:
         play.pc_time = play._convert_clock_to_seconds(action.get("clock"))
 
         # Event Infomation
-        play.description = action.get("description")
         play.event_num = action.get("actionNumber")
-        play.action_type = action.get("actionType")
-        play.event_msg_type = EventMsgType.from_action_type(play.action_type)
+        play.event_msg_type = EventMsgType.from_action_type(action.get("actionType"))
         play.event_msg_action_type = action.get("subType")
 
-        # Block Edge Case
-        if play._is_block():
-            play.action_type = "Block"
+        # Edge Cases
+        description = action.get("description")
+        if play._is_block(description):
             play.event_msg_type = EventMsgType.BLOCK
-
-        # Steal Edge Case
-        if play._is_steal():
-            play.action_type = "Steal"
+        if play._is_steal(description):
             play.event_msg_type = EventMsgType.STEAL
 
         # Scores
@@ -59,7 +56,7 @@ class PlayByPlay:
     def set_home_win(self, home_win: int):
         self.home_win = home_win
 
-    def _convert_clock_to_seconds(self, clock: Optional[str]) -> Optional[int]:
+    def _convert_clock_to_seconds(self, clock: str) -> Optional[int]:
         if not clock:
             return None
 
@@ -79,14 +76,14 @@ class PlayByPlay:
 
         return None
 
-    def _is_assist(self) -> bool:
-        return self.event_msg_type == EventMsgType.FIELD_GOAL_MADE and "AST" in self.description
+    def _is_assist(self, description: str) -> bool:
+        return self.event_msg_type == EventMsgType.FIELD_GOAL_MADE and "AST" in description
 
-    def _is_block(self) -> bool:
-        return self.event_msg_type is None and "BLOCK" in self.description
+    def _is_block(self, description: str) -> bool:
+        return self.event_msg_type is None and "BLOCK" in description
 
-    def _is_steal(self) -> bool:
-        return self.event_msg_type is None and "STEAL" in self.description
+    def _is_steal(self, description: str) -> bool:
+        return self.event_msg_type is None and "STEAL" in description
 
     def _safe_int(self, value: str) -> Optional[int]:
         try:
