@@ -80,12 +80,21 @@ class ClutchDataProcessor:
             return not is_home_team
 
         if play.event_msg_type == EventMsgType.FOUL:
-            offensive_fouls = {"Loose Ball", "Offensive"}
-            if play.event_msg_action_type in offensive_fouls:
+            offensive_fouls = {"Away From Play", "Double Personal", "Loose Ball", "Technical", "Transition Take"}
+            if (
+                play.event_msg_action_type in offensive_fouls or
+                "Offense" in play.event_msg_action_type or
+                "Offensive" in play.event_msg_action_type or 
+                "Flagrant" in play.event_msg_action_type
+            ):
                 return is_home_team
 
-            defensive_fouls = {"Personal", "Shooting"}
-            if play.event_msg_action_type in defensive_fouls:
+            defensive_fouls = {"Personal", "Personal Take", "Shooting"}
+            if (
+                play.event_msg_action_type in defensive_fouls or
+                "Defense" in play.event_msg_action_type or
+                "Defensive" in play.event_msg_action_type
+            ):
                 return not is_home_team
 
         if play.event_msg_type == EventMsgType.REBOUND:
@@ -98,8 +107,8 @@ class ClutchDataProcessor:
 
         return None
 
-    def _is_valid_play(self, play: PlayByPlay) -> bool:
-        """Checks whether a play contains mal data."""
+    def _is_valid(self, play: PlayByPlay) -> bool:
+        """Checks whether a play has missing data."""
         return (
             play.player_id is not None
             and play.team_id is not None
@@ -147,7 +156,7 @@ class ClutchDataProcessor:
                 play._update_scores(previous.away_score, previous.home_score, previous.total_score)
 
             team_info = teams.get(play.team_id)
-            if self._is_valid_play(play) and self._is_clutch(play) and isinstance(team_info, TeamGameInfo):
+            if self._is_valid(play) and self._is_clutch(play) and isinstance(team_info, TeamGameInfo):
                 play.set_home_possession(self._is_home_possession(previous, play, team_info.is_home_team))
                 play.set_home_win(team_info.is_home_win)
 
