@@ -1,5 +1,4 @@
 import pandas as pd
-import time
 
 from typing import Any, Dict, List, Optional
 
@@ -25,17 +24,14 @@ class ClutchDataProcessor:
         df = pd.DataFrame()
         games = self._transform_game_data(data)
 
-        for game_id, teams in sorted(games.items()):
-            time.sleep(0.5)
-            print("Getting play-by-play data for game ID:", game_id)
+        pbp_games = self.api.load_play_by_play_games(game_ids=sorted(games.keys()), delay=1.5)
 
-            pbp_data = self.api.load_play_by_play(game_id)
+        for game_id, pbp_data in pbp_games.items():
             if pbp_data is None:
-                print("No play-by-play data for game ID:", game_id)
                 continue
 
+            teams = games[game_id]
             plays = self._transform_pbp_data(pbp_data, teams)
-
             df = self._add_plays_to_dataframe(df, plays)
 
         return df
@@ -80,12 +76,13 @@ class ClutchDataProcessor:
             return not is_home_team
 
         if play.event_msg_type == EventMsgType.FOUL:
-            offensive_fouls = {"Away From Play", "Double Personal", "Loose Ball", "Technical", "Transition Take"}
+            offensive_fouls = {"Away From Play", "Double Personal", "Loose Ball", "Transition Take"}
             if (
                 play.event_msg_action_type in offensive_fouls or
+                "Flagrant" in play.event_msg_action_type or
                 "Offense" in play.event_msg_action_type or
                 "Offensive" in play.event_msg_action_type or 
-                "Flagrant" in play.event_msg_action_type
+                "Technical" in play.event_msg_action_type
             ):
                 return is_home_team
 
