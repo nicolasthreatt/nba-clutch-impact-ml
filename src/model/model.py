@@ -1,96 +1,75 @@
-# model.py
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
 
-FEATURES = [
-    "event_msg_type_scaled",
-    # "event_msg_action_type_scaled",
-    "period_scaled",
-    "pc_time_scaled",
-    "score_margin_scaled",
-    "home_possession_scaled",
-    # "home_event_scaled", # TODO: (stls vs turn and blks vs miss)
-]
-TARGET = "home_win"
-
-
-def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Preprocesses the data.
-
-    Logistic Regression requires data be scaled to have a mean of 0 and a standard deviation of 1.
-    Fit on the training data and use the same scaler to transform the training and test data.
-
-    Args:
-        df (pd.DataFrame): The data to preprocess.
-
-    Returns:
-        pd.DataFrame: The preprocessed data.
-    """
-    scaler = StandardScaler()
-    # for feature in FEATURES:
-    #     df[feature] = df[feature.replace("_scaled", '')]
-    df[FEATURES] = df[FEATURES].apply(lambda x: x.str.replace("_scaled", ""))
-    df[FEATURES] = scaler.fit_transform(df[FEATURES])
-
-    return df
-
-
-def create_model(dfTrain: pd.DataFrame) -> LogisticRegression:
-    """Creates a logistic regression model.
-
-    Args:
-        dfTrain (pd.DataFrame): The training data.
-
-    Returns:
-        sklearn.linear_model.LogisticRegression: A logistic regression model.
-    """
-    dfTrain = preprocess_data(dfTrain)
+class WinProbabilityModel:
+    """Logistic Regression Model for predicting home team win probability."""
     
-    X = dfTrain[FEATURES].values
-    y = dfTrain[TARGET].values
-    return LogisticRegression().fit(X, y)
+    def __init__(self):
+        self.raw_features = ["period", "pc_time", "away_score", "home_score", "event_code"]
+        self.scaled_features = [f"{c}_scaled" for c in self.raw_features]
+        self.target = "home_win"
 
-
-def evaluate_model(df: pd.DataFrame, model: LogisticRegression) -> None:
-    """Evaluates a logistic regression model.
-
-    Accuracy is the percentage of correctly predicted label
-        = correct predictions / total predictions
-
-    Args:
-        df (pd.DataFrame): Data to evaluate the model on.
-        model (sklearn.linear_model.LogisticRegression): The logistic regression model.
-    """
-    X = df[FEATURES]
-    y = df[TARGET]
-
-    print("\nAccuracy:", model.score(X, y))
-
-
-def predict_win_probs(dfTest: pd.DataFrame, lr: LogisticRegression) -> pd.DataFrame:
-    """Calculcates the home and away teams win probability for each play-by-play clutch event.
-
-    Args:
-        dfTest: DataFrame representation of the test set.
-        lr: Trained Logistical Regression model.
-    
-    Returns:
-        Pandas dataframe with original input columns along with the home and away teams win probability
-        for each play-by-play clutch event.
-    """
-    dfTest = preprocess_data(dfTest)
-    X = dfTest[FEATURES].values
-
-    # Predict the winner of each game and each team's win probability for each play-by-play event
-    dfPredict = (
-        dfTest.assign(
-            predicted_winner=lr.predict(X),
-            home_team_win_probability=lr.predict_proba(X)[:, 1],
-            away_team_win_probability=lr.predict_proba(X)[:, 0],
+        self.scaler = StandardScaler()
+        self.model = LogisticRegression(
+            max_iter=1000,           # Allow more iterations to ensure the model converges
+            solver="lbfgs",          # Optimization algorithm (Limited-memory BFGS)
+            class_weight="balanced"  # Adjusts for imbalanced target classes automatically
         )
-    )[dfTest.columns.tolist() + ["predicted_winner", "home_team_win_probability", "away_team_win_probability"]]
 
-    # Return the new dataframe with 0 fill in for any null data
-    return dfPredict.fillna(0)
+        self.event_codes = None
+
+    def _preprocess(self, df: pd.DataFrame, fit: bool = False) -> pd.DataFrame:
+        """Preprocess dataframe to handle missing data, encode events, and scale features."""
+        df = df.dropna(subset=["home_possession"]).copy()
+
+        # Fill missing event data
+        df["event_msg_type"] = df["event_msg_type"].fillna("MISSING")
+        df["event_msg_action_type"] = df["event_msg_action_type"].fillna("Unknown")
+
+        # Reformat fouls
+        is_foul = df["event_msg_type"] == "Foul"
+        df.loc[is_foul, "event_msg_type"] += " - " + df.loc[is_foul, "event_msg_action_type"]
+
+        # Encode event messages for model
+        if fit:
+            self.event_codes = df["event_msg_type"].astype("category").cat.categories
+        df["event_code"] = pd.Categorical(df["event_msg_type"], categories=self.event_codes).codes
+
+        # Scale features
+        scaler_func = self.scaler.fit_transform if fit else self.scaler.transform
+        df[self.scaled_features] = scaler_func(df[self.raw_features])
+
+        return df
+
+    def fit(self, df: pd.DataFrame):
+        """Fit logistic regression model to training data with target column."""
+        df = self._preprocess(df, fit=True)
+        X = df[self.scaled_features].values
+        y = df[self.target].values
+        self.model.fit(X, y)
+
+    def evaluate(self, df: pd.DataFrame) -> float:
+        """Evaluate model accuracy on the given dataframe.
+           
+           Accuracy is the percentage of correctly predicted label
+            = correct_predictions / total_predictions
+        """
+        df = self._preprocess(df, fit=False)
+        X = df[self.scaled_features].values
+        y = df[self.target].values
+        return self.model.score(X, y)
+
+    def predict_win_probs(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculates away and home teams win probability for each play."""
+        df = self._preprocess(df, fit=False)
+        X = df[self.scaled_features].values
+
+        probs = self.model.predict_proba(X)
+        df = df.assign(
+            predicted_winner=self.model.predict(X),
+            home_win_probability=probs[:, 1],
+            away_win_probability=probs[:, 0],
+        )
+        return df
