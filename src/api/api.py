@@ -1,5 +1,8 @@
 import requests
-from typing import Dict, Optional
+import time
+
+from typing import Dict, Optional, List
+from requests.adapters import HTTPAdapter, Retry
 
 
 class API:
@@ -23,17 +26,22 @@ class API:
         "Cache-Control": "no-cache",
     }
 
-    def __init__(self, timeout: int = 15):
-        self.session = requests.Session()  # Create Persistent/Reusable HTTP Session
+    def __init__(self, timeout: int = 30, retries: int = 3):
+        self.session = requests.Session()
         self.session.headers.update(self.HEADERS)
         self.timeout = timeout
 
-    def load_games(self, season: str) -> Optional[Dict]:
-        """Loads game data from the leaguegamefinder NBA API.
+        retry_strategy = Retry(
+            total=retries,
+            backoff_factor=1.0,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
 
-           Raises:
-               requests.exceptions.RequestException: If the API request fails.
-        """
+    def load_games(self, season: str) -> Optional[Dict]:
+        """Loads game data from the leaguegamefinder NBA API."""
         params = {
             "PlayerOrTeam": "T",
             "LeagueID": "00",
@@ -55,11 +63,7 @@ class API:
             return None
 
     def load_play_by_play(self, game_id: str) -> Optional[Dict]:
-        """Loads play-by-play data for a specific game ID.
-
-           Raises:
-               requests.exceptions.RequestException: If the API request fails.
-        """
+        """Loads play-by-play data for a specific game ID."""
         params = {
             "GameID": game_id,
             "StartPeriod": 4,
@@ -78,3 +82,23 @@ class API:
         except requests.exceptions.RequestException as e:
             print(f"Request failed for game {game_id}: {e}")
             return None
+
+    def load_play_by_play_games(
+        self,
+        game_ids: List[str],
+        delay: float = 0.5,
+    ) -> Dict[str, Optional[Dict]]:
+        """Loads play-by-play data for multiple games safely."""
+        results = {}
+
+        for game_id in game_ids:
+            print(f"Getting play-by-play data for game ID: {game_id}")
+            time.sleep(delay)
+
+            data = self.load_play_by_play(game_id)
+            if data is None:
+                print(f"No play-by-play data for game ID: {game_id}")
+
+            results[game_id] = data
+
+        return results
