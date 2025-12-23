@@ -86,7 +86,7 @@ class ClutchDataProcessor:
             ):
                 return is_home_team
 
-            defensive_fouls = {"Personal", "Personal Take", "Shooting"}
+            defensive_fouls = {"Clear Path", "Personal", "Personal Take", "Shooting"}
             if (
                 play.event_msg_action_type in defensive_fouls or
                 "Defense" in play.event_msg_action_type or
