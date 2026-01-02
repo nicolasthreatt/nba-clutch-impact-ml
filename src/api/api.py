@@ -62,8 +62,8 @@ class API:
             print(f"Request failed for season {season}: {e}")
             return None
 
-    def load_play_by_play(self, game_id: str) -> Optional[Dict]:
-        """Loads play-by-play data for a specific game ID."""
+    def load_play_by_play_batch(self, game_id: str) -> Optional[Dict]:
+        """Historical / batch play-by-play. Use for backfills and reprocessing."""
         params = {
             "GameID": game_id,
             "StartPeriod": 4,
@@ -80,7 +80,20 @@ class API:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            print(f"Request failed for game {game_id}: {e}")
+            print(f"Batch PBP request failed for game {game_id}: {e}")
+            return None
+
+    def load_play_by_play_live(self, game_id: str) -> Optional[List[Dict]]:
+        """Live play-by-play (polling)."""
+        url = f"https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_{game_id}.json"
+
+        try:
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+            return response.json()["game"]["actions"]
+
+        except requests.exceptions.RequestException as e:
+            print(f"Live PBP request failed for game {game_id}: {e}")
             return None
 
     def load_play_by_play_games(
@@ -95,7 +108,7 @@ class API:
             print(f"Getting play-by-play data for game ID: {game_id}")
             time.sleep(delay)
 
-            data = self.load_play_by_play(game_id)
+            data = self.load_play_by_play_batch(game_id)
             if data is None:
                 print(f"No play-by-play data for game ID: {game_id}")
 
