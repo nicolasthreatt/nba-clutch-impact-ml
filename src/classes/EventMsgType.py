@@ -9,6 +9,8 @@ class EventMsgType(str, Enum):
     FIELD_GOAL_MISSED = "Missed Shot"
     FOUL = "Foul"
     FREE_THROW = "Free Throw"
+    FREE_THROW_MADE = "Made Free Throw"
+    FREE_THROW_MISSED = "Missed Free Throw"
     REBOUND = "Rebound"
     STEAL = "Steal"
     TURNOVER = "Turnover"

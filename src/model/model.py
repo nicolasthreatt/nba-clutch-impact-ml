@@ -52,7 +52,7 @@ class WinProbabilityModel:
 
     def evaluate(self, df: pd.DataFrame) -> float:
         """Evaluate model accuracy on the given dataframe.
-           
+
            Accuracy is the percentage of correctly predicted label
             = correct_predictions / total_predictions
         """

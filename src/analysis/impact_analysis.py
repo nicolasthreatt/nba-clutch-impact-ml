@@ -1,4 +1,3 @@
-# src/analysis/impact_analysis.py
 import pandas as pd
 import numpy as np
 
@@ -7,9 +6,6 @@ from typing import Literal
 
 class ClutchWinProbabilityEvaluator:
     """Evaulates clutch impact based on changes in predicted win probability during play-by-play events."""
-
-    def __init__(self):
-        self.aggregation_player: tuple = ("player_id", "player_name")  # Immutable
 
     def generate_clutch_impact_scores(
         self,
@@ -42,7 +38,7 @@ class ClutchWinProbabilityEvaluator:
         if level == "player":
             df_clutch = (
                 df_clutch
-                .groupby(["season", *self.aggregation_player])
+                .groupby(["season", "player_name"])
                 .agg(
                     games_played=("game_id", pd.Series.nunique),
                     clutch_impact_rtg=("clutch_impact_rtg", "sum"),
