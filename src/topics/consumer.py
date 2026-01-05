@@ -1,34 +1,41 @@
-# Description: Consumer class for Kafka topics
-import json
-import requests
-import time
 import threading
-from kafka import KafkaConsumer, KafkaProducer
-from kafka.admin import KafkaAdminClient, NewTopic
-from src.classes.PlayByPlay import PlayByPlayLive
+
+from kafka import KafkaConsumer
 
 
 class Consumer(threading.Thread):
-    def __init__(self, topic: str):
-        threading.Thread.__init__(self)
+    def __init__(self, game_id: str):
+        super().__init__()
         self.stop_event = threading.Event()
-        self.topic = topic
+        self.bootstrap_servers = "localhost:9092"
+        self.topic = f"{game_id}-pbp-live"
+        self.consumer = None
 
     def stop(self):
         self.stop_event.set()
+        if self.consumer:
+            self.consumer.close()
+            print("Consumer stopped.")
 
     def run(self):
-        consumer = KafkaConsumer(
-            bootstrap_servers='localhost:9092',
+        self.consumer = KafkaConsumer(
+            self.topic,
+            bootstrap_servers=self.bootstrap_servers,
             auto_offset_reset='earliest',
-            consumer_timeout_ms=1000
+            group_id='nba-clutch',
+            enable_auto_commit=True,
+            consumer_timeout_ms=500
         )
-        consumer.subscribe([self.topic])
 
-        while not self.stop_event.is_set():
-            for message in consumer:
-                print(message)
-                if self.stop_event.is_set():
-                    break
+        try:
+            while not self.stop_event.is_set():
+                for message in self.consumer:
+                    if self.stop_event.is_set():
+                        break
+                    print(message.value.decode("utf-8"))
 
-        consumer.close()
+        except Exception as e:
+            print(f"Consumer exception: {e}")  # TODO: ADD LOGGING
+
+        finally:
+            self.stop()
