@@ -1,55 +1,67 @@
-# Description: Producer class for the play-by-play streming topic
 import json
-import requests
-import time
 import threading
-from kafka import KafkaProducer
-from src.classes.PlayByPlay import PlayByPlayLive
 
-HEADERS = {
-    'Connection': 'keep-alive',
-    'Accept': 'application/json, text/plain, */*',
-    'x-nba-stats-token': 'true',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36',
-    'x-nba-stats-origin': 'stats',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-Mode': 'cors',
-    'Referer': 'https://stats.nba.com/',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Accept-Language': 'en-US,en;q=0.9',
-}
+from kafka import KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
+
+from src.api.api import API
+from src.classes.PlayByPlayLive import PlayByPlayLive
 
 class Producer(threading.Thread):
-    def __init__(self, game_id: str):
-        threading.Thread.__init__(self)
+    def __init__(self, game_id: str, poll_interval: float = 0.25):
+        super().__init__()
         self.stop_event = threading.Event()
-        self.game_id = "0042200401"
+        self.bootstrap_servers = "localhost:9092"
+        self.game_id = game_id
+        self.topic = f"{self.game_id}-pbp-live"
+        self.api = API(timeout=3)
+        self.producer = None
+        self.last_action_number = None
+        self.poll_interval = poll_interval
+
+        self._create_topic_if_missing()
+
+    def _create_topic_if_missing(self):
+        admin = KafkaAdminClient(bootstrap_servers=self.bootstrap_servers, client_id='test')
+        existing_topics = admin.list_topics()
+
+        if self.topic not in existing_topics:
+            admin.create_topics([NewTopic(name=self.topic, num_partitions=1, replication_factor=1)])
+
+        admin.close()
 
     def stop(self):
         self.stop_event.set()
+        if self.producer:
+            self.producer.flush()
+            self.producer.close()
+            print("Producer stopped.")
 
     def run(self):
-        producer = KafkaProducer(bootstrap_servers='localhost:9092')
+        self.producer = KafkaProducer(bootstrap_servers=self.bootstrap_servers)  # TODO: ADD CHECKPOINTING
 
-        # while not self.stop_event.is_set():
-        while True:
-            play_by_play = self.play_by_play_data(self.game_id)
+        try:
+            while not self.stop_event.is_set():
+                data = self.api.load_play_by_play_live(self.game_id)
+                if not data:
+                    self.stop_event.wait(self.poll_interval)
+                    continue
 
-            for play in play_by_play:
-                play = PlayByPlayLive(play)
-                producer.send(self.game_id + "-pbp-live", value=json.dumps(play.__dict__).encode('utf-8'))
-                break
+                actions = data.get("game", {}).get("actions", [])
+                for action in actions:
+                    action_number = action.get("actionNumber")
+                    if self.last_action_number is not None and action_number <= self.last_action_number:
+                        continue
 
-            time.sleep(5)  # Adjust the interval as needed
+                    pbp = PlayByPlayLive(self.game_id, action)
+                    self.producer.send(self.topic, value=json.dumps(pbp.__dict__).encode("utf-8"))
 
-        producer.close()
+                    self.last_action_number = action_number
 
-    def play_by_play_data(self, gameId: str) -> dict:
-        # Move lines (37-45 here) to a function or maybe into api.py
-        play_by_play_url = "https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_{}.json".format(gameId)
-        response = requests.get(url=play_by_play_url, headers=HEADERS)
+                self.stop_event.wait(self.poll_interval)
 
-        if response.status_code == 200:
-            json_data = response.json()
-            play_by_play = json_data['game']['actions']
-            return play_by_play
+        except Exception as e:
+            print(f"Producer exception: {e}")  # TODO: ADD LOGGING
+
+        finally:
+            self.stop()
