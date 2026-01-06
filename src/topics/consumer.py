@@ -1,6 +1,10 @@
+import logging
 import threading
 
 from kafka import KafkaConsumer
+
+
+logger = logging.getLogger(__name__)
 
 
 class Consumer(threading.Thread):
@@ -10,14 +14,18 @@ class Consumer(threading.Thread):
         self.bootstrap_servers = "localhost:9092"
         self.topic = f"{game_id}-pbp-live"
         self.consumer = None
+        logger.info("Initializing Consumer for topic=%s", self.topic)
 
     def stop(self):
+        logger.info("Stopping Consumer thread")
         self.stop_event.set()
         if self.consumer:
             self.consumer.close()
-            print("Consumer stopped.")
+            logger.info("Consumer stopped.")
 
     def run(self):
+        logger.info("Consumer thread started")
+
         self.consumer = KafkaConsumer(
             self.topic,
             bootstrap_servers=self.bootstrap_servers,
@@ -35,7 +43,7 @@ class Consumer(threading.Thread):
                     print(message.value.decode("utf-8"))
 
         except Exception as e:
-            print(f"Consumer exception: {e}")  # TODO: ADD LOGGING
+            logger.exception(f"Consumer exception: {e}")
 
         finally:
             self.stop()
