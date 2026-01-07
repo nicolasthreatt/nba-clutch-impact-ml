@@ -2,11 +2,13 @@ import math
 from typing import Optional
 
 from src.classes.EventMsgType import EventMsgType
+from src.classes.TeamType import TeamType
 
 
 class PlayByPlay:
     def __init__(self):
-        self.home_possession = None
+        self.event_team = None
+        self.possession_team = None
         self.home_win = None
 
     @classmethod
@@ -19,8 +21,6 @@ class PlayByPlay:
 
         # Team
         play.team_id = action.get("teamId")
-        # play.off_team_id = TODO
-        # play.def_team_id = TODO
 
         # Player
         play.player_id = action.get("personId")
@@ -35,7 +35,7 @@ class PlayByPlay:
         play.event_msg_type = EventMsgType.from_action_type(action.get("actionType"))
         play.event_msg_action_type = action.get("subType")
 
-        # Edge Cases
+        # Event Edge Cases
         description = action.get("description")
         if play._is_block(description):
             play.event_msg_type = EventMsgType.BLOCK
@@ -50,8 +50,11 @@ class PlayByPlay:
 
         return play
 
-    def set_home_possession(self, home_possession: int):
-        self.home_possession = home_possession
+    def set_event_team(self, event_team: TeamType):
+        self.event_team = event_team
+
+    def set_possession_team(self, possession_team: TeamType):
+        self.possession_team = possession_team
 
     def set_home_win(self, home_win: int):
         self.home_win = home_win
