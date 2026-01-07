@@ -1,8 +1,12 @@
+import logging
 import requests
 import time
 
 from typing import Dict, Optional, List
 from requests.adapters import HTTPAdapter, Retry
+
+
+logger = logging.getLogger(__name__)
 
 
 class API:
@@ -12,17 +16,27 @@ class API:
     BASE_LIVE_URL = "https://cdn.nba.com/static/json/liveData/"
 
     BATCH_HEADERS = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json",
-        "Referer": "https://stats.nba.com/",
+        "Host": "stats.nba.com",
+        "User-Agent": ( 
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) " 
+            "Gecko/20100101 Firefox/72.0"
+        ),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.5",
         "x-nba-stats-origin": "stats",
         "x-nba-stats-token": "true",
         "Connection": "keep-alive",
+        "Referer": "https://stats.nba.com/",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache",
     }
 
     LIVE_HEADERS = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json",
+        "User-Agent": ( 
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) " 
+            "Gecko/20100101 Firefox/72.0"
+        ),
+        "Accept": "application/json, text/plain, */*",
         "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
     }
@@ -49,7 +63,7 @@ class API:
         self.live_session.headers.update(self.LIVE_HEADERS)
         self.live_session.mount("https://", adapter)
 
-    def load_games(self, season: str) -> Optional[Dict]:
+    def load_season_games(self, season: str) -> Optional[Dict]:
         """Loads game data from the leaguegamefinder NBA API."""
         params = {
             "PlayerOrTeam": "T",
@@ -68,11 +82,31 @@ class API:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            print(f"Request failed for season {season}: {e}")
+            logger.exception(f"Request failed for season {season}: {e}")
             return None
 
+    def load_play_by_play_games(
+        self,
+        game_ids: List[str],
+        delay: float = 0.5,
+    ) -> Dict[str, Optional[Dict]]:
+        """Loads play-by-play data for multiple games."""
+        results = {}
+
+        for game_id in game_ids:
+            logger.info(f"Getting play-by-play data for game ID: {game_id}")
+            time.sleep(delay)
+
+            data = self.load_play_by_play_batch(game_id)
+            if data is None:
+                logger.warning(f"No play-by-play data for game ID: {game_id}")
+
+            results[game_id] = data
+
+        return results
+
     def load_play_by_play_batch(self, game_id: str) -> Optional[Dict]:
-        """Batch play-by-play. Use for backfills and reprocessing."""
+        """Batch play-by-play data. Use for backfills and reprocessing."""
         params = {
             "GameID": game_id,
             "StartPeriod": 4,
@@ -89,11 +123,11 @@ class API:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            print(f"Batch PBP request failed for game {game_id}: {e}")
+            logger.exception(f"Batch PBP request failed for game {game_id}: {e}")
             return None
 
     def load_play_by_play_live(self, game_id: str) -> Optional[Dict]:
-        """Live play-by-play (polling)."""
+        """Live play-by-play data (polling)."""
         live_url = f"{self.BASE_LIVE_URL}playbyplay/playbyplay_{game_id}.json"
 
         try:
@@ -102,25 +136,5 @@ class API:
             return response.json()
 
         except requests.RequestException as e:
-            print(f"Live PBP request failed for game {game_id}: {e}")
+            logger.exception(f"Live PBP request failed for game {game_id}: {e}")
             return None
-
-    def load_play_by_play_games(
-        self,
-        game_ids: List[str],
-        delay: float = 0.5,
-    ) -> Dict[str, Optional[Dict]]:
-        """Loads play-by-play data for multiple games safely."""
-        results = {}
-
-        for game_id in game_ids:
-            print(f"Getting play-by-play data for game ID: {game_id}")
-            time.sleep(delay)
-
-            data = self.load_play_by_play_batch(game_id)
-            if data is None:
-                print(f"No play-by-play data for game ID: {game_id}")
-
-            results[game_id] = data
-
-        return results
