@@ -5,10 +5,18 @@ from sklearn.preprocessing import StandardScaler
 
 class WinProbabilityModel:
     """Logistic Regression Model for predicting home team win probability."""
-    
+
     def __init__(self):
-        self.raw_features = ["period", "pc_time", "away_score", "home_score", "event_code"]
-        self.scaled_features = [f"{c}_scaled" for c in self.raw_features]
+        self.raw_features = [
+            "period",
+            "pc_time",
+            "away_score",
+            "home_score",
+            "possession_team",
+            "event_team",
+            "event_code"
+        ]
+        self.scaled_features = [f"{feature}_scaled" for feature in self.raw_features]
         self.target = "home_win"
 
         self.scaler = StandardScaler()
