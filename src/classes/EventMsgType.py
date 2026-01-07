@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class EventMsgType(str, Enum):
     INVALID = "Invalid"
 
