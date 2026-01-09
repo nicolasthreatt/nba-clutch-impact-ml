@@ -1,7 +1,7 @@
 import time
 import logging
 
-from cli import cli
+from src.api.cli import cli
 from src.logging_config import setup_logging
 from src.topics.producer import Producer
 from src.topics.consumer import Consumer
