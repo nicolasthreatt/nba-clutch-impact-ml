@@ -5,7 +5,6 @@ import time
 from typing import Dict, Optional, List
 from requests.adapters import HTTPAdapter, Retry
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -62,6 +61,20 @@ class API:
         self.live_session = requests.Session()
         self.live_session.headers.update(self.LIVE_HEADERS)
         self.live_session.mount("https://", adapter)
+
+    def load_live_game_boxscore(self, game_id: str) -> Optional[Dict]:
+        """Loads live boxscore data."""
+        live_url = f"{self.BASE_LIVE_URL}boxscore/boxscore_{game_id}.json"
+
+        try:
+            response = self.live_session.get(live_url, timeout=self.timeout)
+            response.raise_for_status()
+            return response.json()
+
+        except requests.RequestException as e:
+            logger.exception(f"Live game request failed for game {game_id}: {e}")
+            return None
+
 
     def load_season_games(self, season: str) -> Optional[Dict]:
         """Loads game data from the leaguegamefinder NBA API."""

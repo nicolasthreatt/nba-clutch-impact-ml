@@ -8,7 +8,6 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from src.api.api import API
 from src.classes.PlayByPlayLive import PlayByPlayLive
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +53,16 @@ class Producer(threading.Thread):
     def run(self):
         logger.info("Producer thread started")
 
-        # TODO: ADD CHECKPOINTING
+        game = self.api.load_live_game_boxscore(self.game_id)
+        if not game:
+            logger.error(f"No game data found for game_id {self.game_id}")
+            raise RuntimeError(f"Cannot start producer: No game data for game_id {self.game_id}")
+
+        home_team_id = game.get("game", {}).get("homeTeam", {}).get("teamId")
+        away_team_id = game.get("game", {}).get("awayTeam", {}).get("teamId")
+        if home_team_id is None or away_team_id is None:
+            raise ValueError(f"Cannot start producer: Could not find home or away team in game data")
+
         self.producer = KafkaProducer(bootstrap_servers=self.bootstrap_servers)
 
         try:
@@ -71,7 +79,7 @@ class Producer(threading.Thread):
                     if self.last_action_number is not None and action_number <= self.last_action_number:
                         continue
 
-                    pbp = PlayByPlayLive(self.game_id, action)
+                    pbp = PlayByPlayLive(self.game_id, home_team_id, action)
                     self.producer.send(self.topic, value=json.dumps(pbp.__dict__).encode("utf-8"))
                     logger.debug("Sent action %s to topic %s", action_number, self.topic)
 
