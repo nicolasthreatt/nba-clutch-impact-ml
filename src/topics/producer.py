@@ -27,20 +27,21 @@ class Producer(threading.Thread):
         self._create_topic_if_missing()
 
     def _create_topic_if_missing(self):
-        admin = KafkaAdminClient(bootstrap_servers=self.bootstrap_servers)
-        existing_topics = admin.list_topics()
-
-        if self.topic not in existing_topics:
-            logger.info("Creating Kafka topic: %s", self.topic)
-            admin.create_topics([
-                NewTopic(
-                    name=self.topic,
-                    num_partitions=1,
-                    replication_factor=1
-                )
-            ])
-
-        admin.close()
+        try:
+            admin = KafkaAdminClient(bootstrap_servers=self.bootstrap_servers)
+            existing_topics = admin.list_topics()
+            if self.topic not in existing_topics:
+                logger.info("Creating Kafka topic: %s", self.topic)
+                admin.create_topics([
+                    NewTopic(
+                        name=self.topic,
+                        num_partitions=1,
+                        replication_factor=1
+                    )
+                ])
+            admin.close()
+        except Exception:
+            logger.exception("Failed to create or verify Kafka topic: %s", self.topic)
 
     def stop(self):
         logger.info("Stopping Producer thread")
