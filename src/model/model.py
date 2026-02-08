@@ -1,4 +1,7 @@
+import joblib
 import pandas as pd
+
+from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
@@ -6,7 +9,10 @@ from sklearn.preprocessing import StandardScaler
 class WinProbabilityModel:
     """Logistic Regression Model for predicting home team win probability."""
 
+    MODEL_PATH = "models/win_probability.joblib"
+
     def __init__(self):
+        # Features
         self.raw_features = [
             "period",
             "pc_time",
@@ -14,48 +20,60 @@ class WinProbabilityModel:
             "home_score",
             "possession_team",
             "event_team",
-            "event_code"
         ]
-        self.scaled_features = [f"{feature}_scaled" for feature in self.raw_features]
+        self.feature_columns = self.raw_features + ["event_code"]
+        self.scaled_features = [f"{feature}_scaled" for feature in self.feature_columns]
+        self.event_codes = None
+
+        # Target
         self.target = "home_win"
 
+        # Model
         self.scaler = StandardScaler()
         self.model = LogisticRegression(
-            max_iter=1000,           # Allow more iterations to ensure the model converges
-            solver="lbfgs",          # Optimization algorithm (Limited-memory BFGS)
-            class_weight="balanced"  # Adjusts for imbalanced target classes automatically
+            max_iter=1000,            # Allow more iterations to ensure the model converges
+            solver="lbfgs",           # Optimization algorithm (Limited-memory BFGS)
+            class_weight="balanced",  # Adjusts for imbalanced target classes automatically
         )
-
-        self.event_codes = None
 
     def _preprocess(self, df: pd.DataFrame, fit: bool = False) -> pd.DataFrame:
         """Preprocess dataframe to handle missing data, encode events, and scale features."""
-        df = df.dropna(subset=["home_possession"]).copy()
+        if not fit and self.event_codes is None:
+            raise RuntimeError("WinProbabilityModel must be fit or loaded before inference")
 
-        # Fill missing event data
+        # Drop rows missing required features
+        df = df.dropna(subset=self.raw_features)
+
+        # Fill missing events
         df["event_msg_type"] = df["event_msg_type"].fillna("MISSING")
         df["event_msg_action_type"] = df["event_msg_action_type"].fillna("Unknown")
+
+        # Reformat enum columns
+        df["possession_team"] = df["possession_team"].astype(int)
+        df["event_team"] = df["event_team"].astype(int)
 
         # Reformat fouls
         is_foul = df["event_msg_type"] == "Foul"
         df.loc[is_foul, "event_msg_type"] += " - " + df.loc[is_foul, "event_msg_action_type"]
 
-        # Encode event messages for model
+        # Encode event messages
         if fit:
             self.event_codes = df["event_msg_type"].astype("category").cat.categories
         df["event_code"] = pd.Categorical(df["event_msg_type"], categories=self.event_codes).codes
 
         # Scale features
-        scaler_func = self.scaler.fit_transform if fit else self.scaler.transform
-        df[self.scaled_features] = scaler_func(df[self.raw_features])
+        scale = self.scaler.fit_transform if fit else self.scaler.transform
+        df[self.scaled_features] = scale(df[self.feature_columns])
 
         return df
 
     def fit(self, df: pd.DataFrame):
-        """Fit logistic regression model to training data with target column."""
+        """Fits logistic regression model on labeled training data."""
         df = self._preprocess(df, fit=True)
+
         X = df[self.scaled_features].values
         y = df[self.target].values
+
         self.model.fit(X, y)
 
     def evaluate(self, df: pd.DataFrame) -> float:
@@ -65,19 +83,53 @@ class WinProbabilityModel:
             = correct_predictions / total_predictions
         """
         df = self._preprocess(df, fit=False)
+
         X = df[self.scaled_features].values
         y = df[self.target].values
+
         return self.model.score(X, y)
 
     def predict_win_probs(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates away and home teams win probability for each play."""
         df = self._preprocess(df, fit=False)
-        X = df[self.scaled_features].values
 
+        X = df[self.scaled_features].values
         probs = self.model.predict_proba(X)
-        df = df.assign(
+
+        return df.assign(
             predicted_winner=self.model.predict(X),
             home_win_probability=probs[:, 1],
             away_win_probability=probs[:, 0],
         )
-        return df
+
+    def save(self, path: str = self.MODEL_PATH):
+        """Save model artifacts locally."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        joblib.dump(
+            {
+                "model": self.model,
+                "scaler": self.scaler,
+                "event_codes": self.event_codes,
+                "raw_features": self.raw_features,
+                "feature_columns": self.feature_columns,
+                "scaled_features": self.scaled_features,
+            },
+            path,
+        )
+
+    @classmethod
+    def load(cls, path: str = cls.MODEL_PATH) -> "WinProbabilityModel":
+        """Load saved model locally."""
+        data = joblib.load(path)
+
+        instance = cls()
+        instance.model = data["model"]
+        instance.scaler = data["scaler"]
+        instance.event_codes = data["event_codes"]
+        instance.raw_features = data["raw_features"]
+        instance.feature_columns = data.get("feature_columns", instance.raw_features + ["event_code"])
+        instance.scaled_features = data["scaled_features"]
+
+        return instance
