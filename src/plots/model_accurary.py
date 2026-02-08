@@ -7,8 +7,6 @@ def model_accurary(df: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(15, 10))
     
     home_win_filter = df['home_win'] == 1
-    away_win_filter = df['home_win'] == 0
-
     ax.scatter(
         df.loc[home_win_filter, ''].values,
         df.loc[home_win_filter, ''].values,
@@ -16,6 +14,8 @@ def model_accurary(df: pd.DataFrame) -> None:
         label='Home Team Win',
         alpha=0.5
     )
+
+    away_win_filter = df['home_win'] == 0
     ax.scatter(
         df.loc[away_win_filter, ''].values,
         df.loc[away_win_filter, ''].values,

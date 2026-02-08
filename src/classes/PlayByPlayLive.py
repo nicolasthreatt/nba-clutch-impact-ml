@@ -26,7 +26,7 @@ class PlayByPlayLive:
         self.score_home = int(action["scoreHome"]) if action.get("scoreHome") is not None else None
         self.score_away = int(action["scoreAway"]) if action.get("scoreAway") is not None else None
         self.score_margin = 0
-        if self.score_home and self.score_away:
+        if self.score_home is not None and self.score_away is not None:
             self.score_margin = self.score_home - self.score_away
         self.player_name = action.get("playerName")
 
@@ -50,22 +50,18 @@ class PlayByPlayLive:
 
         return None
 
-    def _determine_event_msg_type(self, action_type: str, shot_result: str) -> Optional[str]:
+    def _determine_event_msg_type(self, action_type: str, result: str) -> Optional[str]:
         if not action_type:
             return None
 
         action_type = action_type.lower()
     
         if action_type in ("2pt", "3pt"):
-            return EventMsgType.FIELD_GOAL_MADE if shot_result == "Made" else EventMsgType.FIELD_GOAL_MISSED
-
+            return EventMsgType.FIELD_GOAL_MADE if result == "Made" else EventMsgType.FIELD_GOAL_MISSED
         elif action_type == "freethrow":
-            return EventMsgType.FREE_THROW_MADE if shot_result == "Made" else EventMsgType.FREE_THROW_MISSED
-
+            return EventMsgType.FREE_THROW_MADE if result == "Made" else EventMsgType.FREE_THROW_MISSED
         elif action_type == "rebound":
             return EventMsgType.REBOUND
-
         elif action_type in ("steal", "turnover"):
             return EventMsgType.TURNOVER
-
         return None

@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 
 from typing import Any, Dict, List, Optional
@@ -9,50 +10,53 @@ from src.classes.PlayByPlay import PlayByPlay
 from src.classes.TeamGameInfo import TeamGameInfo
 from src.classes.TeamType import TeamType
 
+logger = logging.getLogger(__name__)
+
 
 class DataProcessor:
     """Processes NBA Play-By-Play data and extracts clutch events."""
     def __init__(self):
         self.api = API()
+        self.clutch_period = 4
+        self.clutch_seconds = 300
+        self.clutch_margin = 5
 
     def get_clutch_events(self, season: str) -> pd.DataFrame:
         """Stores clutch play-by-play events for a given season into a DataFrame."""
 
-        df = pd.DataFrame()
-
         data = self.api.load_season_games(season)
         if not data:
-            return df
+            return pd.DataFrame()
+
+        clutch_plays: List[Dict[str, Any]] = []
 
         games = self._transform_game_data(data)
         pbp = self.api.load_play_by_play_games(game_ids=sorted(games.keys()), delay=1.5)
 
         for game_id, pbp_data in pbp.items():
-            if play is None:
+            if pbp_data is None:
                 continue
 
             teams = games[game_id]
             plays = self._transform_pbp_data(pbp_data, teams)
 
-            df = self._add_plays_to_dataframe(df, plays)
+            if plays:
+                clutch_plays.extend(plays)
 
-        return df
-
-    def _add_plays_to_dataframe(self, df: pd.DataFrame, plays: List[Dict]) -> pd.DataFrame:
-        """Adds a list of plays to a DataFrame and returns the updated DataFrame."""
-        if not plays:
-            return df
-
-        df_plays = pd.DataFrame(plays)
-        return pd.concat([df, df_plays], ignore_index=True)
+        return pd.DataFrame(clutch_plays)
 
     def _is_clutch(self, play: PlayByPlay) -> bool:
         """Last 5 minutes of 4th quarter or OT, where score margin is at most 5 points."""
-        return play.period >= 4 and play.pc_time <= 300 and abs(play.score_margin) <= 5
+        return (
+            play.score_margin is not None
+            and play.period >= self.clutch_period
+            and play.pc_time <= self.clutch_seconds
+            and abs(play.score_margin) <= self.clutch_margin
+        )
 
     def _is_home_possession(
         self,
-        previous: PlayByPlay,
+        previous: Optional[PlayByPlay],
         play: PlayByPlay,
         is_home_team: TeamType
     ) -> Optional[TeamType]:
@@ -97,6 +101,9 @@ class DataProcessor:
                 return is_home_team.flip()
 
         if play.event_msg_type == EventMsgType.REBOUND:
+            if previous is None or previous.team_id is None:
+                logger.debug("Skipping rebound: previous missing for play=%s", vars(play))
+                return None
             is_offensive = previous.team_id == play.team_id
             return is_home_team if is_offensive else is_home_team.flip()
 
@@ -138,7 +145,11 @@ class DataProcessor:
 
         return games
 
-    def _transform_pbp_data(self, data: Dict[str, Any], teams: Dict[str, TeamGameInfo]) -> List[PlayByPlay]:
+    def _transform_pbp_data(
+        self,
+        data: Dict[str, Any],
+        teams: Dict[str, TeamGameInfo]
+    ) -> List[PlayByPlay]:
         """Transforms the play-by-play data into a list of PlayByPlay."""
 
         plays: List[PlayByPlay] = []

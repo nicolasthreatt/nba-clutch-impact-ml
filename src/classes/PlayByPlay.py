@@ -83,10 +83,10 @@ class PlayByPlay:
         return self.event_msg_type == EventMsgType.FIELD_GOAL_MADE and "AST" in description
 
     def _is_block(self, description: str) -> bool:
-        return self.event_msg_type is None and "BLK" in description
+        return self.event_msg_type is None and "BLK" in (description or "")
 
     def _is_steal(self, description: str) -> bool:
-        return self.event_msg_type is None and "STL" in description
+        return self.event_msg_type is None and "STL" in (description or "")
 
     def _safe_int(self, value: str) -> Optional[int]:
         try:

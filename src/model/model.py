@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import brier_score_loss
 
 
 class WinProbabilityModel:
@@ -88,6 +89,16 @@ class WinProbabilityModel:
         y = df[self.target].values
 
         return self.model.score(X, y)
+
+    def brier_score(self, df: pd.DataFrame) -> float:
+        """Calculate Brier score for predicted home win probabilities."""
+        df = self._preprocess(df, fit=False)
+
+        X = df[self.scaled_features].values
+        y_true = df[self.target].values
+        y_prob = self.model.predict_proba(X)[:, 1]
+
+        return float(brier_score_loss(y_true, y_prob))
 
     def predict_win_probs(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates away and home teams win probability for each play."""
