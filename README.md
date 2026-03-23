@@ -18,18 +18,21 @@ Data is pulled from NBA endpoints:
 - Batch: `stats.nba.com` (`leaguegamefinder`, `playbyplayv3`)
 - Live: `cdn.nba.com` live play-by-play JSON
 
+Batch data is cached in SQLite at `data/nba_clutch.sqlite`. CSV exports are optional snapshots, not the primary storage path.
+
 ## Usage
 ### Batch pipeline
 1. Fetch clutch events for a season.
-2. Train `WinProbabilityModel`.
-3. Evaluate accuracy on a dataset.
-4. Predict win probabilities.
-5. Compute clutch impact ratings.
+2. Cache clutch events in SQLite.
+3. Train `WinProbabilityModel`.
+4. Evaluate accuracy and Brier score.
+5. Predict win probabilities.
+6. Compute clutch impact ratings.
 
 Example run:
 ```bash
-python batch.py --season_id 2025-26
-python batch.py --game_id 0022400001
+python batch.py --train-season 2024-25 --test-season 2025-26
+python batch.py --train-season 2024-25 --test-season 2025-26 --refresh
 ```
 
 ### Streaming pipeline
