@@ -113,9 +113,9 @@ class WinProbabilityModel:
             away_win_probability=probs[:, 0],
         )
 
-    def save(self, path: str = self.MODEL_PATH):
+    def save(self, path: str = None):
         """Save model artifacts locally."""
-        path = Path(path)
+        path = Path(path or self.MODEL_PATH)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         joblib.dump(
@@ -131,9 +131,9 @@ class WinProbabilityModel:
         )
 
     @classmethod
-    def load(cls, path: str = cls.MODEL_PATH) -> "WinProbabilityModel":
+    def load(cls, path: str = None) -> "WinProbabilityModel":
         """Load saved model locally."""
-        data = joblib.load(path)
+        data = joblib.load(path or cls.MODEL_PATH)
 
         instance = cls()
         instance.model = data["model"]

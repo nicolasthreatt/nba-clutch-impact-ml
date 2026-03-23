@@ -26,7 +26,7 @@ class Consumer(threading.Thread):
         self.producer = None
 
         # Model Info
-        self.model = WinProbabilityModel.load("src/models/win_probability.joblib")
+        self.model = WinProbabilityModel.load()
         self._prime_model()  # Avoid first-message latency
 
         logger.info("Initializing Consumer for topic=%s", self.topic)
@@ -104,4 +104,4 @@ class Consumer(threading.Thread):
             logger.debug("Published win probs to topic %s", self.output_topic)
 
         except Exception:
-            logger.exception("Publishe failed for msg: %s", json.dumps(msg, indent=2))
+            logger.exception("Publish failed for msg: %s", json.dumps(msg, indent=2))
