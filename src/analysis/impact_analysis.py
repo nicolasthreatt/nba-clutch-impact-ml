@@ -5,7 +5,7 @@ from typing import Literal
 
 
 class ClutchWinProbabilityEvaluator:
-    """Evaulates clutch impact based on changes in predicted win probability during play-by-play events."""
+    """Evaluates clutch impact from play-by-play win probability changes."""
 
     def generate_clutch_impact_scores(
         self,
@@ -27,6 +27,7 @@ class ClutchWinProbabilityEvaluator:
             raise ValueError(f"Invalid level: {level}")
 
         df = df.copy()
+        self._validate_columns(df)
 
         df = df.sort_values(
             ["game_id", "period", "pc_time", "event_num"],
@@ -56,9 +57,29 @@ class ClutchWinProbabilityEvaluator:
             df[f"prior_{col}"] = self._calculate_prior_win_probability(df, col)
             df[f"delta_{col}"] = df[col] - df[f"prior_{col}"].fillna(0)
 
-        return df.fillna(0)
+        return df
 
-    def _calculate_prior_win_probability(self, df: pd.DataFrame, team_type: str) -> pd.Series:
+    def _validate_columns(self, df: pd.DataFrame) -> None:
+        """Validate that clutch impact inputs include the required columns."""
+        required_columns = {
+            "game_id",
+            "period",
+            "pc_time",
+            "event_num",
+            "possession_team",
+            "home_win_probability",
+            "away_win_probability",
+        }
+        missing_columns = required_columns - set(df.columns)
+        if missing_columns:
+            missing = ", ".join(sorted(missing_columns))
+            raise ValueError(f"Missing required columns: {missing}")
+
+    def _calculate_prior_win_probability(
+        self,
+        df: pd.DataFrame,
+        team_type: str
+    ) -> pd.Series:
         """Computes prior win probability for each play."""
         return df.groupby("game_id")[team_type].shift(1).fillna(0)
 
@@ -67,7 +88,7 @@ class ClutchWinProbabilityEvaluator:
         df = self._calculate_win_probability_changes(df)
 
         df["clutch_impact_rtg"] = np.where(
-            df["home_possession"],
+            df["possession_team"].astype(bool),
             df["delta_home_win_probability"],
             df["delta_away_win_probability"],
         )

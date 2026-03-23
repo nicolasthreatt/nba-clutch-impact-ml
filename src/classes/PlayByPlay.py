@@ -9,7 +9,6 @@ class PlayByPlay:
     def __init__(self):
         self.event_team = None
         self.possession_team = None
-        self.home_possession = None
         self.home_win = None
 
     @classmethod
@@ -56,7 +55,6 @@ class PlayByPlay:
 
     def set_possession_team(self, possession_team: TeamType):
         self.possession_team = possession_team
-        self.home_possession = bool(possession_team) if possession_team is not None else None
 
     def set_home_win(self, home_win: int):
         self.home_win = home_win
