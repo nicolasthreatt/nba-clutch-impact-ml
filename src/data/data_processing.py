@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Any, Dict, List, Optional
 
 from src.api.api import API
+from src.data.storage import SQLiteStorage
 from src.classes.EventMsgType import EventMsgType
 from src.classes.Game import Game
 from src.classes.PlayByPlay import PlayByPlay
@@ -17,13 +18,33 @@ class DataProcessor:
     """Processes NBA Play-By-Play data and extracts clutch events."""
     def __init__(self):
         self.api = API()
+        self.storage = SQLiteStorage()
         self.clutch_period = 4
         self.clutch_seconds = 300
         self.clutch_margin = 5
 
-    def get_clutch_events(self, season: str) -> pd.DataFrame:
-        """Stores clutch play-by-play events for a given season into a DataFrame."""
+    def get_or_create_clutch_events(
+        self,
+        season: str,
+        refresh: bool = False
+    ) -> pd.DataFrame:
+        """Load cached clutch events from SQLite or fetch and persist them."""
+        if not refresh and self.storage.has_clutch_events(season):
+            logger.info("Loading cached clutch events for season=%s from SQLite", season)
+            return self.storage.load_clutch_events(season)
 
+        logger.info("Fetching clutch events for season=%s from NBA API", season)
+        df = self._fetch_clutch_events(season)
+        if df.empty:
+            logger.warning("No clutch events found for season=%s", season)
+            return df
+
+        rows = self.storage.save_clutch_events(df, replace_season=refresh)
+        logger.info("Saved %s clutch events for season=%s to SQLite", rows, season)
+        return df
+
+    def _fetch_clutch_events(self, season: str) -> pd.DataFrame:
+        """Fetch and transform clutch play-by-play events for a given season."""
         data = self.api.load_season_games(season)
         if not data:
             return pd.DataFrame()
@@ -54,13 +75,15 @@ class DataProcessor:
             and abs(play.score_margin) <= self.clutch_margin
         )
 
-    def _is_home_possession(
+    def _get_possession_team(
         self,
         previous: Optional[PlayByPlay],
         play: PlayByPlay,
         is_home_team: TeamType
     ) -> Optional[TeamType]:
         """Determines which team has possession for the play."""
+
+        action_type = play.event_msg_action_type or ""
 
         offensive_events = {
             EventMsgType.ASSIST,
@@ -82,21 +105,31 @@ class DataProcessor:
             return is_home_team.flip()
 
         if play.event_msg_type == EventMsgType.FOUL:
-            offensive_fouls = {"Away From Play", "Double Personal", "Loose Ball", "Transition Take"}
+            offensive_fouls = {
+                "Away From Play",
+                "Double Personal",
+                "Loose Ball",
+                "Transition Take",
+            }
             if (
-                play.event_msg_action_type in offensive_fouls or
-                "Flagrant" in play.event_msg_action_type or
-                "Offense" in play.event_msg_action_type or
-                "Offensive" in play.event_msg_action_type or 
-                "Technical" in play.event_msg_action_type
+                action_type in offensive_fouls or
+                "Flagrant" in action_type or
+                "Offense" in action_type or
+                "Offensive" in action_type or 
+                "Technical" in action_type
             ):
                 return is_home_team
 
-            defensive_fouls = {"Clear Path", "Personal", "Personal Take", "Shooting"}
+            defensive_fouls = {
+                "Clear Path",
+                "Personal",
+                "Personal Take",
+                "Shooting",
+            }
             if (
-                play.event_msg_action_type in defensive_fouls or
-                "Defense" in play.event_msg_action_type or
-                "Defensive" in play.event_msg_action_type
+                action_type in defensive_fouls or
+                "Defense" in action_type or
+                "Defensive" in action_type
             ):
                 return is_home_team.flip()
 
@@ -108,7 +141,7 @@ class DataProcessor:
             return is_home_team if is_offensive else is_home_team.flip()
 
         if play.event_msg_type == EventMsgType.VIOLATION:
-            is_defensive = "Defensive" in play.event_msg_action_type
+            is_defensive = "Defensive" in action_type
             return is_home_team.flip() if is_defensive else is_home_team
 
         return None
@@ -124,8 +157,11 @@ class DataProcessor:
             and play.event_msg_type not in (None, EventMsgType.INVALID,)
         )
 
-    def _transform_game_data(self, data: Dict[str, Any]) -> Dict[str, Dict[str, TeamGameInfo]]:
-        """Transforms extractheted leaguegamefinder data into a reformatted nested dictionary."""
+    def _transform_game_data(
+        self,
+        data: Dict[str, Any]
+    ) -> Dict[str, Dict[str, TeamGameInfo]]:
+        """Transform leaguegamefinder data into a nested game dictionary."""
 
         games: Dict[str, Dict[str, TeamGameInfo]] = {}  # {game_id: {team_id: TeamGameInfo}}
 
@@ -149,10 +185,10 @@ class DataProcessor:
         self,
         data: Dict[str, Any],
         teams: Dict[str, TeamGameInfo]
-    ) -> List[PlayByPlay]:
-        """Transforms the play-by-play data into a list of PlayByPlay."""
+    ) -> List[Dict[str, Any]]:
+        """Transforms the play-by-play data into a list of clutch event dictionaries."""
 
-        plays: List[PlayByPlay] = []
+        plays: List[Dict[str, Any]] = []
         previous: Optional[PlayByPlay] = None
 
         game = data.get("game", {})
@@ -163,12 +199,22 @@ class DataProcessor:
             scores = (play.away_score, play.home_score, play.total_score)
 
             if isinstance(previous, PlayByPlay) and None in scores:
-                play._update_scores(previous.away_score, previous.home_score, previous.total_score)
+                play._update_scores(
+                    previous.away_score,
+                    previous.home_score,
+                    previous.total_score,
+                )
 
             team_info = teams.get(play.team_id)
-            if self._is_valid(play) and self._is_clutch(play) and isinstance(team_info, TeamGameInfo):
-                play.set_event_team(TeamType(team_info.is_home_team))
-                play.set_possession_team(self._is_home_possession(previous, play, team_info.is_home_team))
+            if (
+                self._is_valid(play) and
+                self._is_clutch(play) and
+                isinstance(team_info, TeamGameInfo)
+            ):
+                play.set_event_team(team_info.is_home_team)
+                play.set_possession_team(
+                    self._get_possession_team(previous, play, team_info.is_home_team)
+                )
                 play.set_home_win(team_info.is_home_win)
 
                 plays.append(vars(play))
