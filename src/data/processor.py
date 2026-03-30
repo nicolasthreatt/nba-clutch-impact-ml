@@ -18,17 +18,24 @@ class DataProcessor:
     """Processes NBA Play-By-Play data and extracts clutch events."""
     def __init__(self):
         self.api = API()
-        self.storage = SQLiteStorage()
+        self._storage: Optional[SQLiteStorage] = None
         self.clutch_period = 4
         self.clutch_seconds = 300
         self.clutch_margin = 5
 
+    @property
+    def storage(self) -> SQLiteStorage:
+        if self._storage is None:
+            self._storage = SQLiteStorage()
+        return self._storage
+
     def get_or_create_clutch_events(
         self,
         season: str,
-        refresh: bool = False
+        refresh: bool = False,
+        dry_run: bool = False,
     ) -> pd.DataFrame:
-        """Load cached clutch events from SQLite or fetch and persist them."""
+        """Load cached clutch events or fetch them, optionally skipping persistence."""
         if not refresh and self.storage.has_clutch_events(season):
             logger.info("Loading cached clutch events for season=%s from SQLite", season)
             return self.storage.load_clutch_events(season)
@@ -37,6 +44,10 @@ class DataProcessor:
         df = self._fetch_clutch_events(season)
         if df.empty:
             logger.warning("No clutch events found for season=%s", season)
+            return df
+
+        if dry_run:
+            logger.info("Dry run enabled; skipping SQLite save for season=%s", season)
             return df
 
         rows = self.storage.save_clutch_events(df, replace_season=refresh)
