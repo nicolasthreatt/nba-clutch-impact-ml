@@ -43,7 +43,7 @@ class SQLiteStorage:
         return connection
 
     def _create_tables(self) -> None:
-        """Create SQLite tables and indexes required by the batch pipeline."""
+        """Create SQLite tables and indexes."""
         column_defs = ",\n".join(
             f"{column_name} {column_type}"
             for column_name, column_type in self.CLUTCH_EVENT_COLUMNS
@@ -66,7 +66,7 @@ class SQLiteStorage:
             )
 
     def _season_key(self, season: Optional[str]) -> Optional[str]:
-        """Map season strings like 2024-25 to the internal 2-digit season key."""
+        """Return the 2-digit season key."""
         if season is None:
             return None
         return season[2:4] if len(season) >= 4 and "-" in season else season
@@ -97,7 +97,7 @@ class SQLiteStorage:
         return clutch_events[column_names]
 
     def has_clutch_events(self, season: str) -> bool:
-        """Return whether SQLite already has clutch events for the requested season."""
+        """Return whether clutch events exist for the season."""
         season_key = self._season_key(season)
 
         with self._connect() as connection:
@@ -125,18 +125,16 @@ class SQLiteStorage:
                         (season,),
                     )
 
-            clutch_events.to_sql(
-                "_clutch_events_staging", connection, if_exists="replace", index=False
-            )
+            clutch_events.to_sql("_temp", connection, if_exists="replace", index=False)
             columns = ", ".join(column_names)
             connection.execute(
                 f"""
                 INSERT OR REPLACE INTO {self.CLUTCH_EVENTS_TABLE} ({columns})
                 SELECT {columns}
-                FROM _clutch_events_staging
+                FROM _temp
                 """
             )
-            connection.execute("DROP TABLE IF EXISTS _clutch_events_staging")
+            connection.execute("DROP TABLE IF EXISTS _temp")
 
         return len(clutch_events)
 
