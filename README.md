@@ -18,7 +18,7 @@ Data is pulled from NBA endpoints:
 - Batch: `stats.nba.com` (`leaguegamefinder`, `playbyplayv3`)
 - Live: `cdn.nba.com` live play-by-play JSON
 
-Batch data is cached in SQLite at `data/nba_clutch.sqlite`. CSV exports are optional snapshots, not the primary storage path.
+Batch data is cached in SQLite at `data/nba_clutch.sqlite`.
 
 ## Usage
 ### Batch pipeline
@@ -29,18 +29,30 @@ Batch data is cached in SQLite at `data/nba_clutch.sqlite`. CSV exports are opti
 5. Predict win probabilities.
 6. Compute clutch impact ratings.
 
-Example run:
+CLI args:
+- `--train-season`: training season, defaults to `2024-25`
+- `--test-season`: evaluation season, defaults to `2025-26`
+- `--refresh`: ignore cached SQLite data and refetch season data from NBA APIs
+- `--dry-run`: run the batch pipeline without writing to SQLite or saving the model
+
+Examples:
 ```bash
 python batch.py --train-season 2024-25 --test-season 2025-26
 python batch.py --train-season 2024-25 --test-season 2025-26 --refresh
+python batch.py --train-season 2024-25 --test-season 2025-26 --dry-run
 ```
 
 ### Streaming pipeline
 Requires a local Kafka broker at `localhost:9092`.
 
+CLI args:
+- `--game_id`: NBA game ID to stream, required
+- `--topic`: Kafka topic name, defaults to `play-by-test`
+
 Start streaming:
 ```bash
 python streaming.py --game_id 0022400001
+python streaming.py --game_id 0022400001 --topic play-by-test
 ```
 
 This starts a producer that polls live play-by-play and a consumer that loads a trained model and runs inference on each event.
